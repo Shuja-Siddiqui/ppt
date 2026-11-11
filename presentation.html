@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Syed Brothers · STA Launch Presentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <style>
+        :root {
+            --bg: #070B12;
+            --ink: #F2F5F8;
+            --muted: #8FA3B5;
+            --gold: #F6C95A;
+            --cyan: #53B8FF;
+            --line: rgba(246, 201, 90, 0.28);
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: radial-gradient(ellipse 70% 55% at 50% 45%, #121A24 0%, #070B12 62%, #05070A 100%);
+            color: var(--ink);
+            font-family: 'IBM Plex Sans', sans-serif;
+            user-select: none;
+        }
+
+        /* ===== Idle power stage ===== */
+        #boot-stage {
+            position: fixed;
+            inset: 0;
+            z-index: 40;
+            display: grid;
+            place-items: center;
+            transition: opacity 0.9s var(--ease), visibility 0.9s;
+        }
+        #boot-stage.is-gone {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .boot-brand {
+            position: absolute;
+            top: max(28px, 4vh);
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-family: 'Sora', sans-serif;
+        }
+        .boot-brand strong {
+            display: block;
+            font-size: clamp(18px, 2.4vw, 28px);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--gold);
+        }
+        .boot-brand span {
+            display: block;
+            margin-top: 8px;
+            font-size: clamp(11px, 1.2vw, 14px);
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .power-wrap {
+            position: relative;
+            width: min(42vmin, 280px);
+            height: min(42vmin, 280px);
+        }
+        #power-btn {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            border-radius: 50%;
+            cursor: default;
+            background:
+                radial-gradient(circle at 35% 30%, #2A3648 0%, #151C26 55%, #0B1016 100%);
+            box-shadow:
+                0 0 0 1px rgba(255,255,255,0.08) inset,
+                0 0 0 10px rgba(11,16,22,0.55),
+                0 24px 60px rgba(0,0,0,0.55),
+                0 0 40px rgba(83,184,255,0.12);
+            color: #D7E4F0;
+            position: relative;
+            transition: transform 0.25s ease, box-shadow 0.4s ease;
+        }
+        #power-btn.is-armed {
+            box-shadow:
+                0 0 0 1px rgba(246,201,90,0.35) inset,
+                0 0 0 10px rgba(11,16,22,0.55),
+                0 24px 60px rgba(0,0,0,0.55),
+                0 0 48px rgba(246,201,90,0.28);
+        }
+        #power-btn.is-on {
+            transform: scale(0.96);
+            color: var(--gold);
+            box-shadow:
+                0 0 0 1px rgba(246,201,90,0.5) inset,
+                0 0 0 12px rgba(11,16,22,0.4),
+                0 0 80px rgba(246,201,90,0.45);
+        }
+        #power-btn svg {
+            width: 28%;
+            height: 28%;
+        }
+        .power-ring {
+            position: absolute;
+            inset: -10px;
+            border-radius: 50%;
+            border: 1px solid rgba(214,228,242,0.18);
+            animation: ring-spin 18s linear infinite;
+            pointer-events: none;
+        }
+        .power-ring::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-top-color: rgba(236,244,252,0.85);
+            border-right-color: rgba(83,184,255,0.35);
+        }
+        @keyframes ring-spin { to { transform: rotate(360deg); } }
+
+        /* Hand cue — CEO places hand, then Enter */
+        #hand-cue {
+            position: absolute;
+            right: -18%;
+            bottom: -8%;
+            width: min(28vmin, 170px);
+            pointer-events: none;
+            filter: drop-shadow(0 12px 20px rgba(0,0,0,0.45));
+            animation: hand-reach 2.4s ease-in-out infinite;
+            transform-origin: 70% 90%;
+        }
+        #hand-cue.is-hide {
+            opacity: 0;
+            transition: opacity 0.45s ease;
+        }
+        @keyframes hand-reach {
+            0%, 100% { transform: translate(8px, 10px) rotate(-8deg); }
+            50% { transform: translate(-6px, -8px) rotate(-14deg); }
+        }
+        .enter-hint {
+            position: absolute;
+            bottom: max(36px, 5vh);
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-family: 'Sora', sans-serif;
+        }
+        .enter-hint kbd {
+            display: inline-block;
+            margin-bottom: 10px;
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: 1px solid rgba(246,201,90,0.55);
+            background: rgba(11,16,22,0.88);
+            color: var(--gold);
+            font-size: clamp(13px, 1.4vw, 16px);
+            letter-spacing: 0.18em;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+        }
+        .enter-hint p {
+            margin: 0;
+            color: var(--muted);
+            font-size: clamp(12px, 1.2vw, 14px);
+            letter-spacing: 0.08em;
+        }
+
+        /* ===== Story stage ===== */
+        #story-stage {
+            position: fixed;
+            inset: 0;
+            z-index: 20;
+            opacity: 0;
+            visibility: hidden;
+        }
+        #story-stage.is-live {
+            opacity: 1;
+            visibility: visible;
+        }
+        #map {
+            position: absolute;
+            inset: 0;
+            background: #0B1016;
+        }
+        #map .maplibregl-ctrl-attrib { font-size: 9px; opacity: 0.35; }
+
+        #story-veil {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(ellipse at 50% 12%, rgba(246,201,90,0.08), transparent 42%),
+                linear-gradient(90deg, rgba(7,11,18,0.55), transparent 22%, transparent 78%, rgba(7,11,18,0.72)),
+                linear-gradient(180deg, rgba(7,11,18,0.35), transparent 28%, transparent 70%, rgba(7,11,18,0.55));
+        }
+
+        #caption {
+            position: absolute;
+            left: max(24px, 2.5vw);
+            bottom: max(28px, 4vh);
+            z-index: 8;
+            width: min(520px, 42vw);
+            padding: 18px 20px;
+            border-radius: 16px;
+            border: 1px solid var(--line);
+            background: rgba(11,16,22,0.88);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 18px 40px rgba(0,0,0,0.4);
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        #caption.is-on {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+        }
+        #caption .kicker {
+            font-family: 'Sora', sans-serif;
+            color: var(--gold);
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        #caption h1 {
+            margin: 0 0 8px;
+            font-family: 'Sora', sans-serif;
+            font-size: clamp(20px, 2.4vw, 30px);
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            line-height: 1.2;
+        }
+        #caption p {
+            margin: 0;
+            color: #C9D7E4;
+            font-size: clamp(13px, 1.25vw, 15px);
+            line-height: 1.5;
+        }
+
+        #progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            z-index: 9;
+            background: rgba(255,255,255,0.06);
+        }
+        #progress > span {
+            display: block;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #C45C1A, #F6C95A, #53B8FF);
+        }
+
+        #top-line {
+            position: absolute;
+            top: max(16px, 2vh);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 8;
+            font-family: 'Sora', sans-serif;
+            font-size: 12px;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--gold);
+            text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+            opacity: 0;
+        }
+        #top-line.is-on { opacity: 1; transition: opacity 0.6s ease; }
+
+        /* Mature site / HQ markers */
+        .pin {
+            transform: translate(-50%, -100%);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: 'IBM Plex Sans', sans-serif;
+            opacity: 0.22;
+            filter: grayscale(0.4);
+            transition: opacity 0.6s ease, filter 0.6s ease, transform 0.6s ease;
+        }
+        .pin.is-on {
+            opacity: 1;
+            filter: none;
+            z-index: 5;
+        }
+        .pin.is-soft {
+            opacity: 0.55;
+            filter: none;
+        }
+        .pin-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #E8F4FF;
+            border: 2px solid rgba(11,16,22,0.85);
+            box-shadow: 0 0 0 4px rgba(83,184,255,0.25), 0 0 16px rgba(83,184,255,0.55);
+        }
+        .pin-card {
+            margin-bottom: 8px;
+            min-width: 148px;
+            max-width: 190px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(11,16,22,0.92);
+            border: 1px solid rgba(83,184,255,0.35);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+            opacity: 0;
+            transform: translateY(6px);
+            transition: opacity 0.45s ease, transform 0.45s ease;
+        }
+        .pin.is-on .pin-card {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .pin-card .city {
+            color: var(--cyan);
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+        .pin-card .name {
+            font-family: 'Sora', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            color: #F2F5F8;
+            line-height: 1.25;
+        }
+        .pin-card .desc {
+            margin-top: 4px;
+            color: #A8B8C8;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+        .pin.is-hq .pin-dot {
+            width: 18px;
+            height: 18px;
+            background: var(--gold);
+            box-shadow: 0 0 0 5px rgba(246,201,90,0.28), 0 0 22px rgba(246,201,90,0.7);
+        }
+        .pin.is-hq .pin-card {
+            border-color: rgba(246,201,90,0.55);
+            min-width: 180px;
+        }
+        .pin.is-hq .pin-card .city { color: var(--gold); }
+        .pin-stem {
+            width: 2px;
+            height: 12px;
+            background: rgba(246,201,90,0.65);
+        }
+
+        .comet {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #F8FCFF;
+            box-shadow:
+                0 0 6px 2px #fff,
+                0 0 16px 8px rgba(103,232,249,0.9),
+                0 0 30px 14px rgba(56,189,248,0.45);
+        }
+        .comet.is-gold {
+            box-shadow:
+                0 0 6px 2px #FFFBEB,
+                0 0 16px 8px rgba(252,211,77,0.95),
+                0 0 30px 14px rgba(245,158,11,0.45);
+        }
+
+        /* Rocket */
+        #rocket-stage {
+            position: absolute;
+            inset: 0;
+            z-index: 12;
+            display: none;
+            overflow: hidden;
+            pointer-events: none;
+            background: transparent;
+            transition: background 0.9s ease;
+        }
+        #rocket-stage.is-on { display: block; }
+        #rocket-stage.is-space {
+            background: radial-gradient(ellipse at 50% 120%, #1a2740 0%, #070B12 42%, #02040a 100%);
+        }
+        .stars {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            background-image:
+                radial-gradient(1.5px 1.5px at 12% 18%, #fff, transparent),
+                radial-gradient(1px 1px at 40% 30%, #fff, transparent),
+                radial-gradient(1.5px 1.5px at 70% 22%, #fff, transparent),
+                radial-gradient(1px 1px at 85% 60%, #fff, transparent),
+                radial-gradient(1.5px 1.5px at 25% 75%, #fff, transparent);
+            transition: opacity 0.8s ease;
+        }
+        #rocket-stage.is-space .stars { opacity: 0.85; }
+        .rocket-stack {
+            position: absolute;
+            left: 50%;
+            top: 55%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0;
+            transform: translate(-50%, 0);
+        }
+        .sta-flag {
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .sta-pole {
+            width: 4px;
+            height: 64px;
+            background: linear-gradient(#E7EEF5, #8493A3);
+            border-radius: 2px;
+        }
+        .sta-field {
+            min-width: 108px;
+            padding: 10px 12px;
+            border-radius: 4px 10px 10px 4px;
+            background: linear-gradient(135deg, #0B3D91, #1D4ED8);
+            border: 1px solid rgba(255,255,255,0.25);
+            text-align: center;
+            font-family: 'Sora', sans-serif;
+            animation: flag-wave 1.4s ease-in-out infinite;
+            transform-origin: left center;
+        }
+        @keyframes flag-wave {
+            0%, 100% { transform: perspective(120px) rotateY(0); }
+            50% { transform: perspective(120px) rotateY(-12deg); }
+        }
+        .sta-field strong {
+            display: block;
+            font-size: 26px;
+            letter-spacing: 0.18em;
+        }
+        .sta-field span {
+            display: block;
+            margin-top: 3px;
+            font-size: 9px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            opacity: 0.85;
+        }
+        .rocket {
+            width: 52px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            filter: drop-shadow(0 12px 24px rgba(83,184,255,0.35));
+        }
+        .rocket-nose {
+            width: 0; height: 0;
+            border-left: 17px solid transparent;
+            border-right: 17px solid transparent;
+            border-bottom: 26px solid #F2F5F8;
+        }
+        .rocket-body {
+            width: 34px;
+            height: 84px;
+            border-radius: 6px 6px 10px 10px;
+            background: linear-gradient(#E7EEF5, #8FA3B5);
+            display: grid;
+            place-items: center;
+            font-family: 'Sora', sans-serif;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            color: #0B3D91;
+        }
+        .rocket-flame {
+            width: 14px;
+            height: 32px;
+            margin-top: -2px;
+            border-radius: 40% 40% 50% 50%;
+            background: linear-gradient(#FFF7AE, #F97316, transparent);
+            opacity: 0;
+        }
+        #rocket-stage.is-launch .rocket-flame { opacity: 1; animation: flame 0.18s ease-in-out infinite alternate; }
+        @keyframes flame {
+            from { transform: scaleY(0.85); }
+            to { transform: scaleY(1.2) translateY(3px); }
+        }
+        .rocket-caption {
+            position: absolute;
+            left: 50%;
+            bottom: max(64px, 9vh);
+            transform: translateX(-50%);
+            text-align: center;
+            font-family: 'Sora', sans-serif;
+            opacity: 0;
+        }
+        .rocket-caption strong {
+            display: block;
+            font-size: clamp(28px, 4vh, 42px);
+            letter-spacing: 0.28em;
+            color: var(--gold);
+        }
+        .rocket-caption span {
+            display: block;
+            margin-top: 8px;
+            font-size: clamp(12px, 1.5vh, 15px);
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #A8B8C8;
+        }
+
+        /* Growth intertitle */
+        #growth-card {
+            position: absolute;
+            inset: 0;
+            z-index: 14;
+            display: grid;
+            place-items: center;
+            background: rgba(5,7,10,0.72);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #growth-card.is-on { opacity: 1; transition: opacity 0.8s ease; }
+        #growth-card .panel {
+            width: min(720px, 86vw);
+            padding: 36px 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(246,201,90,0.4);
+            background: linear-gradient(160deg, rgba(18,24,34,0.96), rgba(11,16,22,0.94));
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+            transform: translateY(16px) scale(0.97);
+        }
+        #growth-card.is-on .panel {
+            transform: none;
+            transition: transform 0.8s var(--ease);
+        }
+        #growth-card .panel .eyebrow {
+            color: var(--gold);
+            font-family: 'Sora', sans-serif;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+        #growth-card .panel h2 {
+            margin: 0 0 12px;
+            font-family: 'Sora', sans-serif;
+            font-size: clamp(26px, 3.4vw, 40px);
+            line-height: 1.2;
+        }
+        #growth-card .panel p {
+            margin: 0;
+            color: #C9D7E4;
+            font-size: clamp(14px, 1.5vw, 17px);
+            line-height: 1.55;
+        }
+
+        /* Dashboard */
+        #dashboard {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            background: #F1F5F9;
+            opacity: 0;
+            pointer-events: none;
+            display: grid;
+            place-items: center;
+        }
+        #dashboard.is-on {
+            opacity: 1;
+            pointer-events: auto;
+            transition: opacity 0.7s ease;
+        }
+        #dashboard img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #F1F5F9;
+        }
+        #dash-label {
+            position: absolute;
+            left: 24px;
+            bottom: 20px;
+            font-family: 'Sora', sans-serif;
+            font-size: 12px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #4F46E5;
+            background: rgba(255,255,255,0.92);
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #E5E7EB;
+        }
+    </style>
+</head>
+<body>
+    <!-- BOOT: hand on power, CEO presses Enter -->
+    <section id="boot-stage" aria-label="Launch arming">
+        <div class="boot-brand">
+            <strong>Syed Brothers</strong>
+            <span>Site Tracking App · Launch</span>
+        </div>
+        <div class="power-wrap">
+            <div class="power-ring" aria-hidden="true"></div>
+            <button id="power-btn" type="button" aria-label="Power armed — press Enter to launch" aria-pressed="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 2v10"/>
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                </svg>
+            </button>
+            <div id="hand-cue" aria-hidden="true">
+                <svg viewBox="0 0 120 140" width="100%" height="100%">
+                    <path fill="#E8C4A8" d="M52 18c4 0 7 3 7 7v38l6-8c3-4 9-3 11 2l8 18c2 4 1 9-3 11l-2 1v18c0 14-10 26-24 28l-8 1c-16 1-30-11-30-27V62c0-4 3-7 7-7s7 3 7 7v20l3-28c0-4 3-7 7-7s7 3 7 7v22l3-30c0-4 3-7 7-7z"/>
+                    <path fill="#C45C1A" opacity="0.9" d="M38 96c2 18 16 30 32 29l6-1c10-2 18-10 20-20-8 8-20 12-32 10-8-1-16-5-22-11 0 0-2-3-4-7z"/>
+                    <circle cx="86" cy="42" r="7" fill="#F6C95A" opacity="0.85"/>
+                    <path stroke="#F6C95A" stroke-width="3" stroke-linecap="round" fill="none" d="M78 34l-18-14"/>
+                </svg>
+            </div>
+        </div>
+        <div class="enter-hint">
+            <kbd>ENTER</kbd>
+            <p>Place hand on power · press Enter to begin</p>
+        </div>
+    </section>
+
+    <!-- AUTO STORY -->
+    <section id="story-stage" aria-hidden="true">
+        <div id="progress"><span id="progress-bar"></span></div>
+        <div id="top-line">STA · Syed Brothers</div>
+        <div id="map"></div>
+        <div id="story-veil"></div>
+        <aside id="caption" aria-live="polite">
+            <div class="kicker" id="cap-kicker">Launch</div>
+            <h1 id="cap-title">Site Tracking</h1>
+            <p id="cap-body">Digitizing construction operations across Pakistan.</p>
+        </aside>
+
+        <div id="rocket-stage" aria-hidden="true">
+            <div class="stars" aria-hidden="true"></div>
+            <div class="rocket-stack" id="rocket-stack">
+                <div class="sta-flag">
+                    <div class="sta-field"><strong>STA</strong><span>Site Tracking App</span></div>
+                    <div class="sta-pole"></div>
+                </div>
+                <div class="rocket">
+                    <div class="rocket-nose"></div>
+                    <div class="rocket-body">STA</div>
+                    <div class="rocket-flame"></div>
+                </div>
+            </div>
+            <div class="rocket-caption" id="rocket-caption">
+                <strong>STA</strong>
+                <span>Powered by ConsoleDot</span>
+            </div>
+        </div>
+
+        <div id="growth-card" aria-hidden="true">
+            <div class="panel">
+                <div class="eyebrow">Outcome</div>
+                <h2>Digitalization scales the company</h2>
+                <p>One live network from Head Office to every site — clearer decisions, faster material flow, and room to grow.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="dashboard" aria-hidden="true">
+        <img src="assets/site-tracking-dashboard.png" alt="Site Tracking Dashboard">
+        <div id="dash-label">Site Tracking · Live Dashboard</div>
+    </section>
+
+    <script>
+(function () {
+    const HQ = {
+        id: 'hq',
+        city: 'Lahore',
+        name: 'Head Office',
+        desc: 'Command center · Admin, QA, Account, Purchase',
+        lat: 31.4618606,
+        lng: 74.4147173
+    };
+
+    const SITES = [
+        { id: 'mul-dha', city: 'Multan', name: 'DHA Multan Phase 1', desc: 'Hero site · full ops dry-run', lat: 30.1345, lng: 71.5488, hero: true },
+        { id: 'lhr-kk', city: 'Lahore', name: 'DHA Phase 4 · KK', desc: 'Grey structure · live materials', lat: 31.4788, lng: 74.3972 },
+        { id: 'lhr-aa', city: 'Lahore', name: 'DHA Phase 4 · AA', desc: 'Foundation · site uploads', lat: 31.4522, lng: 74.3895 },
+        { id: 'lhr-bahria', city: 'Lahore', name: 'Bahria Town · Sector C', desc: 'Floor slab in progress', lat: 31.3688, lng: 74.1845 },
+        { id: 'khi-dha', city: 'Karachi', name: 'DHA Phase 8 · Zone A', desc: 'Grey structure · purchase linked', lat: 24.8115, lng: 67.0688 },
+        { id: 'khi-clifton', city: 'Karachi', name: 'Clifton Block 2', desc: 'Foundation · admin queue', lat: 24.8138, lng: 67.0305 },
+        { id: 'khi-bahria', city: 'Karachi', name: 'Bahria Karachi · P2', desc: 'Columns · QA review', lat: 25.0045, lng: 67.3120 },
+        { id: 'isb-bahria', city: 'Islamabad', name: 'Bahria Enclave · C', desc: 'Grey structure · daily sync', lat: 33.5655, lng: 73.1785 },
+        { id: 'fsd-dha', city: 'Faisalabad', name: 'DHA Faisalabad', desc: 'Steel fixing · HQ pipeline', lat: 31.4180, lng: 73.0785 },
+        { id: 'pew-hay', city: 'Peshawar', name: 'Hayatabad Phase 7', desc: 'Basement · field updates', lat: 33.9735, lng: 71.4415 }
+    ];
+
+    const PK_CENTER = [69.3, 30.4];
+    const PK_ZOOM = 5.2;
+    const HERO = SITES.find(function (s) { return s.hero; }) || SITES[0];
+
+    // Condensed concept beats — calm pacing for wall presentation
+    const FLOW = [
+        { title: 'Admin creates the site', body: 'Head Office opens Multan DHA on desktop — stages, roles, and ownership set once.', kicker: 'HQ Desktop', hold: 6.5, fly: 'hq', signal: null },
+        { title: 'Field team is notified', body: 'Supervisor and QA receive the live site on their devices — same record, two roles.', kicker: 'Notify', hold: 5.5, fly: 'hero', signal: ['hq', 'hero'] },
+        { title: 'QA defines the stages', body: 'Construction stages lock in. Progress can only move through the approved path.', kicker: 'QA', hold: 5.8, fly: 'hq', signal: null },
+        { title: 'Supervisor requests material', body: 'From the site, mobile request goes straight into the HQ workflow — no calls, no sheets.', kicker: 'Field Mobile', hold: 6.2, fly: 'hero', signal: ['hero', 'hq'] },
+        { title: 'Approve · Purchase · Dispatch', body: 'QA, Account, and Purchase clear the request. Logistics moves stock to Multan.', kicker: 'HQ Chain', hold: 7.0, fly: 'hq', signal: ['hq', 'hero'] },
+        { title: 'Site receives & closes', body: 'Supervisor confirms receipt. The loop is complete — and repeatable on every site.', kicker: 'Complete', hold: 5.8, fly: 'hero', signal: ['hero', 'hq'] }
+    ];
+
+    let map = null;
+    let markers = {};
+    let started = false;
+    let masterTl = null;
+    let pulseMarkers = [];
+    let pulseAnims = [];
+
+    const boot = document.getElementById('boot-stage');
+    const powerBtn = document.getElementById('power-btn');
+    const handCue = document.getElementById('hand-cue');
+    const story = document.getElementById('story-stage');
+    const caption = document.getElementById('caption');
+    const progressBar = document.getElementById('progress-bar');
+    const topLine = document.getElementById('top-line');
+    const rocketStage = document.getElementById('rocket-stage');
+    const rocketStack = document.getElementById('rocket-stack');
+    const rocketCaption = document.getElementById('rocket-caption');
+    const growthCard = document.getElementById('growth-card');
+    const dashboard = document.getElementById('dashboard');
+
+    function setCaption(kicker, title, body) {
+        document.getElementById('cap-kicker').textContent = kicker || '';
+        document.getElementById('cap-title').textContent = title || '';
+        document.getElementById('cap-body').textContent = body || '';
+        caption.classList.remove('is-on');
+        void caption.offsetWidth;
+        caption.classList.add('is-on');
+    }
+
+    function setProgress(pct) {
+        progressBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    }
+
+    function makePin(item, isHq) {
+        const el = document.createElement('div');
+        el.className = 'pin' + (isHq ? ' is-hq' : '');
+        el.innerHTML =
+            '<div class="pin-card">' +
+                '<div class="city">' + item.city + (isHq ? ' · HQ' : '') + '</div>' +
+                '<div class="name">' + item.name + '</div>' +
+                '<div class="desc">' + item.desc + '</div>' +
+            '</div>' +
+            '<div class="pin-stem"></div>' +
+            '<div class="pin-dot"></div>';
+        return el;
+    }
+
+    function setPinState(mode, focusId) {
+        Object.keys(markers).forEach(function (id) {
+            const el = markers[id].getElement();
+            el.classList.remove('is-on', 'is-soft');
+            if (mode === 'hq-only') {
+                if (id === 'hq') el.classList.add('is-on');
+            } else if (mode === 'hero') {
+                if (id === 'hq') el.classList.add('is-soft');
+                if (id === HERO.id) el.classList.add('is-on');
+            } else if (mode === 'focus') {
+                if (id === 'hq') el.classList.add('is-soft');
+                if (id === focusId) el.classList.add('is-on');
+            } else if (mode === 'network') {
+                el.classList.add(id === 'hq' ? 'is-on' : 'is-soft');
+            } else if (mode === 'all') {
+                el.classList.add('is-on');
+            }
+        });
+    }
+
+    function flyTo(center, zoom, duration, pitch, bearing) {
+        if (!map) return;
+        map.easeTo({
+            center: center,
+            zoom: zoom,
+            pitch: pitch == null ? 35 : pitch,
+            bearing: bearing == null ? 0 : bearing,
+            duration: duration || 2800,
+            essential: true,
+            easing: function (t) {
+                return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            }
+        });
+    }
+
+    function buildArc(from, to, segs) {
+        const n = segs || 28;
+        const dx = to[0] - from[0];
+        const dy = to[1] - from[1];
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const bulge = Math.min(2.6, Math.max(0.3, dist * 0.2));
+        const px = -dy / dist;
+        const py = dx / dist;
+        const coords = [];
+        for (let i = 0; i <= n; i++) {
+            const t = i / n;
+            const e = Math.sin(Math.PI * t);
+            coords.push([from[0] + dx * t + px * bulge * e, from[1] + dy * t + py * bulge * e]);
+        }
+        return coords;
+    }
+
+    function pointOn(coords, t) {
+        const c = Math.max(0, Math.min(1, t));
+        const n = coords.length - 1;
+        const f = c * n;
+        const i = Math.min(Math.floor(f), n - 1);
+        const lt = f - i;
+        return [coords[i][0] + (coords[i + 1][0] - coords[i][0]) * lt, coords[i][1] + (coords[i + 1][1] - coords[i][1]) * lt];
+    }
+
+    function ensureLayers() {
+        if (!map.getSource('net')) {
+            map.addSource('net', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+            map.addLayer({
+                id: 'net-glow', type: 'line', source: 'net',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#38BDF8', 'line-width': 14, 'line-opacity': 0.22, 'line-blur': 2.2 }
+            });
+            map.addLayer({
+                id: 'net-line', type: 'line', source: 'net',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#67E8F9', 'line-width': 2.4, 'line-opacity': 0.9 }
+            });
+            map.addLayer({
+                id: 'net-energy', type: 'line', source: 'net',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#E0F2FE', 'line-width': 1.5, 'line-opacity': 0.95, 'line-dasharray': [0.7, 2] }
+            });
+        }
+    }
+
+    function setNetwork(mode, siteIds) {
+        ensureLayers();
+        const ids = siteIds || SITES.map(function (s) { return s.id; });
+        const features = ids.map(function (id) {
+            const site = SITES.find(function (s) { return s.id === id; });
+            if (!site) return null;
+            return {
+                type: 'Feature',
+                properties: {},
+                geometry: { type: 'LineString', coordinates: buildArc([site.lng, site.lat], [HQ.lng, HQ.lat], 30) }
+            };
+        }).filter(Boolean);
+        map.getSource('net').setData({ type: 'FeatureCollection', features: features });
+        const on = mode !== 'off';
+        ['net-glow', 'net-line', 'net-energy'].forEach(function (id) {
+            map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+        });
+        if (mode === 'strong') {
+            map.setPaintProperty('net-glow', 'line-opacity', 0.34);
+            map.setPaintProperty('net-glow', 'line-width', 18);
+        }
+    }
+
+    function clearPulses() {
+        pulseAnims.forEach(function (a) { if (a && a.kill) a.kill(); });
+        pulseAnims = [];
+        pulseMarkers.forEach(function (m) { if (m) m.remove(); });
+        pulseMarkers = [];
+    }
+
+    function fireComet(from, to, gold, duration) {
+        const coords = buildArc(from, to, 28);
+        const el = document.createElement('div');
+        el.className = 'comet' + (gold ? ' is-gold' : '');
+        const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(from).addTo(map);
+        pulseMarkers.push(marker);
+        const state = { t: 0 };
+        const anim = gsap.to(state, {
+            t: 1,
+            duration: duration || 2.4,
+            ease: 'power1.inOut',
+            onUpdate: function () { marker.setLngLat(pointOn(coords, state.t)); },
+            onComplete: function () {
+                gsap.to(el, { opacity: 0, duration: 0.35, onComplete: function () { marker.remove(); } });
+            }
+        });
+        pulseAnims.push(anim);
+        ensureLayers();
+        map.getSource('net').setData({
+            type: 'FeatureCollection',
+            features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } }]
+        });
+        ['net-glow', 'net-line', 'net-energy'].forEach(function (id) {
+            map.setLayoutProperty(id, 'visibility', 'visible');
+        });
+        map.setPaintProperty('net-glow', 'line-opacity', 0.28);
+        map.setPaintProperty('net-glow', 'line-width', 14);
+    }
+
+    function startMeshPulse() {
+        clearPulses();
+        setNetwork('strong');
+        SITES.forEach(function (site, i) {
+            const coords = buildArc([site.lng, site.lat], [HQ.lng, HQ.lat], 30);
+            [false, true].forEach(function (gold, gi) {
+                const el = document.createElement('div');
+                el.className = 'comet' + (gold ? ' is-gold' : '');
+                const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+                    .setLngLat(gold ? [HQ.lng, HQ.lat] : [site.lng, site.lat])
+                    .addTo(map);
+                pulseMarkers.push(marker);
+                const state = { t: 0 };
+                const anim = gsap.to(state, {
+                    t: 1,
+                    duration: 2.8 + (i % 4) * 0.25,
+                    delay: i * 0.12 + gi * 0.4,
+                    ease: 'none',
+                    repeat: -1,
+                    onUpdate: function () {
+                        marker.setLngLat(pointOn(coords, gold ? 1 - state.t : state.t));
+                    }
+                });
+                pulseAnims.push(anim);
+            });
+        });
+        const dash = { p: 0 };
+        const dashAnim = gsap.to(dash, {
+            p: 3,
+            duration: 2.2,
+            repeat: -1,
+            ease: 'none',
+            onUpdate: function () {
+                if (map.getLayer('net-energy')) {
+                    map.setPaintProperty('net-energy', 'line-dasharray', [Math.max(0.2, dash.p), 1.6, 0.5, 1.8]);
+                }
+            }
+        });
+        pulseAnims.push(dashAnim);
+    }
+
+    function initMap() {
+        map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    esri: {
+                        type: 'raster',
+                        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                        tileSize: 256,
+                        attribution: 'Esri'
+                    }
+                },
+                layers: [{ id: 'esri', type: 'raster', source: 'esri' }]
+            },
+            center: PK_CENTER,
+            zoom: 4.6,
+            pitch: 0,
+            bearing: 0,
+            interactive: false,
+            attributionControl: true
+        });
+
+        map.on('load', function () {
+            const hqEl = makePin(HQ, true);
+            markers.hq = new maplibregl.Marker({ element: hqEl, anchor: 'bottom' })
+                .setLngLat([HQ.lng, HQ.lat]).addTo(map);
+            SITES.forEach(function (site) {
+                const el = makePin(site, false);
+                markers[site.id] = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+                    .setLngLat([site.lng, site.lat]).addTo(map);
+            });
+            ensureLayers();
+            setNetwork('off');
+            setPinState('hq-only');
+        });
+    }
+
+    function placeRocketAtHq() {
+        if (!map || !rocketStack) return;
+        const p = map.project([HQ.lng, HQ.lat]);
+        const rect = rocketStage.getBoundingClientRect();
+        const mapRect = document.getElementById('map').getBoundingClientRect();
+        const x = (mapRect.left - rect.left) + p.x;
+        const y = (mapRect.top - rect.top) + p.y;
+        gsap.set(rocketStack, { left: x, top: y, xPercent: -50, yPercent: -100, x: 0, y: 0, opacity: 0, scale: 0.85 });
+    }
+
+    function runCinematic() {
+        const tl = gsap.timeline({
+            onUpdate: function () {
+                setProgress(tl.progress() * 96);
+            }
+        });
+        masterTl = tl;
+        let t = 0;
+
+        // 1) Establish HQ slowly
+        tl.add(function () {
+            topLine.classList.add('is-on');
+            topLine.textContent = 'Syed Brothers · Head Office';
+            setCaption('Headquarters', 'Lahore DHA Phase 5', 'Decisions start here — Admin, QA, Account, and Purchase on one desktop system.');
+            setPinState('hq-only');
+            setNetwork('off');
+            flyTo([HQ.lng, HQ.lat], 13.6, 3200, 42, -8);
+        }, t);
+        t += 7.5;
+
+        // 2) Concept
+        tl.add(function () {
+            topLine.textContent = 'Launching Site Tracking App';
+            setCaption('The idea', 'Digitize the whole operation', 'From Head Office to every construction site — one live network instead of calls and spreadsheets.');
+            flyTo(PK_CENTER, PK_ZOOM, 3400, 0, 0);
+            setPinState('network');
+        }, t);
+        t += 6.5;
+
+        // 3) Multan dry-run intro
+        tl.add(function () {
+            topLine.textContent = 'Dry-run · Multan DHA';
+            setCaption('Proof on one site', HERO.name, 'We walk the full business loop once in Multan — then the same system scales nationwide.');
+            setPinState('hero');
+            flyTo([HERO.lng, HERO.lat], 12.0, 3200, 40, 10);
+        }, t);
+        t += 7.0;
+
+        // 4) Condensed workflow beats
+        FLOW.forEach(function (beat) {
+            tl.add(function () {
+                clearPulses();
+                setCaption(beat.kicker, beat.title, beat.body);
+                if (beat.fly === 'hq') {
+                    setPinState('hq-only');
+                    flyTo([HQ.lng, HQ.lat], 12.8, 3000, 38, -6);
+                } else {
+                    setPinState('hero');
+                    flyTo([HERO.lng, HERO.lat], 11.8, 3000, 36, 8);
+                }
+                if (beat.signal) {
+                    const a = beat.signal[0] === 'hq' ? [HQ.lng, HQ.lat] : [HERO.lng, HERO.lat];
+                    const b = beat.signal[1] === 'hq' ? [HQ.lng, HQ.lat] : [HERO.lng, HERO.lat];
+                    setTimeout(function () { fireComet(a, b, beat.signal[0] === 'hq', 2.6); }, 900);
+                }
+            }, t);
+            t += beat.hold;
+        });
+
+        // 5) Calm city presence — gentle, not rapid hopping
+        const tour = [
+            SITES.find(function (s) { return s.city === 'Karachi'; }),
+            SITES.find(function (s) { return s.city === 'Islamabad'; }),
+            SITES.find(function (s) { return s.city === 'Peshawar'; }),
+            SITES.find(function (s) { return s.city === 'Faisalabad'; })
+        ].filter(Boolean);
+
+        tl.add(function () {
+            clearPulses();
+            topLine.textContent = 'Nationwide sites';
+            setCaption('Every city', 'Same system · every site', 'After Multan, the model extends — each city site links both ways with Head Office.');
+            flyTo(PK_CENTER, PK_ZOOM, 3200, 0, 0);
+            setPinState('network');
+            setNetwork('strong');
+        }, t);
+        t += 5.5;
+
+        tour.forEach(function (site) {
+            tl.add(function () {
+                setPinState('focus', site.id);
+                setCaption(site.city, site.name, site.desc + ' — live link to Lahore HQ.');
+                flyTo([site.lng, site.lat], 10.6, 3600, 30, 0);
+                setTimeout(function () {
+                    fireComet([site.lng, site.lat], [HQ.lng, HQ.lat], false, 2.8);
+                    setTimeout(function () {
+                        fireComet([HQ.lng, HQ.lat], [site.lng, site.lat], true, 2.8);
+                    }, 500);
+                }, 1100);
+            }, t);
+            t += 8.5;
+        });
+
+        // 6) Full digitalization mesh
+        tl.add(function () {
+            clearPulses();
+            topLine.textContent = 'Full digital network';
+            setCaption('Digitalization', 'Every site ↔ Head Office', 'Powerful two-way signals. One company. One live operation.');
+            setPinState('all');
+            flyTo(PK_CENTER, PK_ZOOM, 3800, 0, 0);
+            startMeshPulse();
+        }, t);
+        t += 10;
+
+        // 7) HQ pad + rocket
+        tl.add(function () {
+            clearPulses();
+            setNetwork('off');
+            topLine.textContent = 'STA Launch';
+            setCaption('From Head Office', 'STA takes flight', 'Site Tracking App — powered by ConsoleDot.');
+            setPinState('hq-only');
+            flyTo([HQ.lng, HQ.lat], 14.2, 3200, 48, -4);
+        }, t);
+        t += 5.5;
+
+        tl.add(function () {
+            caption.classList.remove('is-on');
+            rocketStage.classList.add('is-on');
+            rocketStage.setAttribute('aria-hidden', 'false');
+            placeRocketAtHq();
+            gsap.timeline()
+                .to(rocketStack, { opacity: 1, scale: 1, duration: 0.8, ease: 'power2.out' })
+                .add(function () { rocketStage.classList.add('is-launch'); })
+                .to(rocketStack, {
+                    y: -Math.max(window.innerHeight * 0.88, 620),
+                    duration: 3.4,
+                    ease: 'power3.in',
+                    delay: 0.45
+                })
+                .add(function () {
+                    rocketStage.classList.add('is-space');
+                    gsap.to(rocketCaption, { opacity: 1, duration: 0.6 });
+                }, '-=2.5')
+                .to(rocketStack, { opacity: 0, duration: 0.5 }, '-=0.4');
+        }, t);
+        t += 8.5;
+
+        // 8) Growth message
+        tl.add(function () {
+            growthCard.classList.add('is-on');
+            growthCard.setAttribute('aria-hidden', 'false');
+            topLine.textContent = 'Growth';
+        }, t);
+        t += 6.5;
+
+        // 9) Dashboard
+        tl.add(function () {
+            setProgress(100);
+            growthCard.classList.remove('is-on');
+            rocketStage.classList.remove('is-on', 'is-space', 'is-launch');
+            dashboard.classList.add('is-on');
+            dashboard.setAttribute('aria-hidden', 'false');
+            story.classList.remove('is-live');
+        }, t);
+    }
+
+    function beginLaunch() {
+        if (started) return;
+        started = true;
+        powerBtn.classList.add('is-on');
+        powerBtn.setAttribute('aria-pressed', 'true');
+        handCue.classList.add('is-hide');
+
+        gsap.to(boot, {
+            opacity: 0,
+            duration: 0.9,
+            delay: 0.35,
+            onComplete: function () {
+                boot.classList.add('is-gone');
+                story.classList.add('is-live');
+                story.setAttribute('aria-hidden', 'false');
+                if (map) map.resize();
+                runCinematic();
+            }
+        });
+    }
+
+    function armPower() {
+        powerBtn.classList.add('is-armed');
+    }
+
+    window.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            beginLaunch();
+        }
+    });
+
+    // Optional click also starts (after arming visual)
+    powerBtn.addEventListener('click', function () {
+        beginLaunch();
+    });
+
+    armPower();
+    initMap();
+})();
+    </script>
+</body>
+</html>

@@ -1,0 +1,3284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STA — Site Tracking Demo | Syed Brothers</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    :root {
+      --bg: #070A0E;
+      --cyan: #53B8FF;
+      --ink: #131b2e;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --theme: #4547D0;
+      --theme-soft: #eef0ff;
+      --ok: #059669;
+      --warn: #d97706;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; width: 100%; height: 100%; overflow: hidden;
+      background: var(--bg); color: #F2F5F8;
+      font-family: "DM Sans", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    #boot-screen {
+      position: fixed; inset: 0; z-index: 80;
+      display: grid; place-items: center;
+      background: radial-gradient(ellipse 70% 58% at 50% 46%, #141c26 0%, #070a0e 58%, #05070a 100%);
+      transition: opacity .7s ease;
+    }
+    #boot-screen.is-gone { opacity: 0; pointer-events: none; }
+    .boot-stack { text-align: center; width: min(280px, 80vw); }
+    .boot-title {
+      font-family: "JetBrains Mono", monospace;
+      letter-spacing: .22em; text-transform: uppercase;
+      color: #8493A3; font-size: 11px; margin: 14px 0 10px;
+    }
+    .boot-track {
+      height: 3px; border-radius: 99px; background: #0D141C;
+      border: 1px solid rgba(255,255,255,.06); overflow: hidden;
+    }
+    #boot-bar {
+      height: 100%; width: 0;
+      background: linear-gradient(90deg, #53B8FF, #A6DFFF);
+      transition: width .25s ease;
+    }
+    .boot-status {
+      margin-top: 10px; font-family: "JetBrains Mono", monospace;
+      font-size: 10px; letter-spacing: .12em; color: var(--cyan);
+    }
+
+    #power-station {
+      position: fixed; inset: 0; z-index: 60;
+      display: grid; place-items: center;
+      background: radial-gradient(ellipse 70% 58% at 50% 46%, #141c26 0%, #070a0e 70%);
+      transition: opacity .55s ease, visibility .55s ease;
+    }
+    #power-station.is-gone { opacity: 0; visibility: hidden; pointer-events: none; }
+    .power-logo {
+      position: absolute; top: 22px; left: 22px; z-index: 2;
+      width: 64px; height: 64px; margin: 0;
+    }
+    .power-logo img {
+      width: 100%; height: 100%; object-fit: contain;
+      filter: drop-shadow(0 0 14px rgba(83,184,255,.3));
+    }
+    #power-btn {
+      width: min(150px, 36vw); height: min(150px, 36vw);
+      border-radius: 50%; border: 0; cursor: pointer;
+      background: radial-gradient(circle at 35% 30%, #1a2433, #0b1018 70%);
+      box-shadow: 0 0 0 1px rgba(166,223,255,.25), 0 0 40px rgba(83,184,255,.18), inset 0 0 30px rgba(0,0,0,.55);
+      color: #cfe7ff; font-size: 42px;
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    #power-btn:hover { transform: scale(1.04); box-shadow: 0 0 0 1px rgba(166,223,255,.4), 0 0 55px rgba(83,184,255,.28), inset 0 0 30px rgba(0,0,0,.55); }
+    .power-hint {
+      margin-top: 22px; text-align: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px; letter-spacing: .18em; color: #8493A3; text-transform: uppercase;
+    }
+
+    #demo-stage {
+      position: fixed; inset: 0; z-index: 40;
+      opacity: 0; visibility: hidden;
+      transition: opacity .5s ease, visibility .5s ease;
+    }
+    #demo-stage.is-live { opacity: 1; visibility: visible; }
+
+    #map-layer {
+      position: absolute; inset: 0;
+      transition: opacity .55s ease, filter .55s ease, transform .8s ease;
+    }
+    #map-layer.is-dim {
+      opacity: .28; filter: saturate(.7) brightness(.55);
+      transform: scale(1.02);
+    }
+    #map-layer.is-focus {
+      opacity: 1; filter: none; transform: scale(1);
+    }
+    #map-layer.is-hidden {
+      opacity: 0; pointer-events: none;
+    }
+    #ops-map { position: absolute; inset: 0; }
+    #map-offline {
+      position: absolute; inset: 0; display: none; place-items: center;
+      background: #0b1220; color: #94a3b8; font-size: 14px; z-index: 2;
+    }
+    #map-offline.is-on { display: grid; }
+
+    .hq-pulse {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #53B8FF; border: 3px solid #fff;
+      box-shadow: 0 0 0 0 rgba(83,184,255,.7);
+      animation: hqPulse 1.4s ease-out infinite;
+    }
+    @keyframes hqPulse {
+      0% { box-shadow: 0 0 0 0 rgba(83,184,255,.7); }
+      70% { box-shadow: 0 0 0 18px rgba(83,184,255,0); }
+      100% { box-shadow: 0 0 0 0 rgba(83,184,255,0); }
+    }
+    .sta-badge {
+      margin-top: 8px; padding: 6px 10px; border-radius: 10px;
+      background: rgba(7,10,14,.92); border: 1px solid rgba(83,184,255,.45);
+      color: #E8F4FF; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      white-space: nowrap;
+    }
+    .sta-badge span { display: block; font-weight: 500; color: #93c5fd; font-size: 10px; margin-top: 2px; }
+    .site-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #F49E0B; border: 2px solid #fff;
+      box-shadow: 0 0 0 4px rgba(244,158,11,.25);
+    }
+    .user-pin {
+      min-width: 92px; padding: 6px 8px; border-radius: 12px;
+      background: rgba(15,23,42,.92); border: 1px solid rgba(255,255,255,.14);
+      color: #fff; font-size: 10px; text-align: center;
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+      transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+    }
+    .user-pin strong { display: block; font-size: 11px; }
+    .user-pin .pin-sub { display: block; opacity: .72; font-size: 9px; margin-top: 1px; }
+    .user-pin.is-hot {
+      border-color: #53B8FF;
+      box-shadow: 0 0 0 3px rgba(83,184,255,.25), 0 10px 24px rgba(0,0,0,.35);
+      animation: pinHot 1.1s ease-in-out infinite;
+    }
+    .user-pin.is-hit {
+      border-color: #86efac;
+      box-shadow: 0 0 0 4px rgba(134,239,172,.35), 0 12px 28px rgba(0,0,0,.4);
+      transform: scale(1.08);
+      animation: pinHit .7s ease-out 1;
+    }
+    @keyframes pinHot {
+      0%,100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+    @keyframes pinHit {
+      0% { transform: scale(.9); }
+      40% { transform: scale(1.14); }
+      100% { transform: scale(1.08); }
+    }
+
+    #laptop-stage {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      padding: 18px 18px 78px;
+      pointer-events: none;
+      opacity: 0; transform: translateY(18px) scale(.96);
+      transition: opacity .55s ease, transform .55s cubic-bezier(.22,1,.36,1);
+      z-index: 5;
+    }
+    #laptop-stage.is-on {
+      opacity: 1; transform: none; pointer-events: auto;
+    }
+    #laptop-stage.is-shrink {
+      transform: translateY(8%) scale(.78);
+    }
+    #mobile-stage {
+      position: absolute; inset: 0;
+      display: grid; place-items: start center;
+      padding: 12px 16px 178px;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0; visibility: hidden;
+      transition: opacity .45s ease, visibility .45s ease;
+      z-index: 5;
+    }
+    #mobile-stage.is-on {
+      opacity: 1; visibility: visible; pointer-events: auto;
+    }
+    #mobile-screen {
+      width: min(360px, 92vw);
+      max-height: calc(100vh - 190px);
+      filter: drop-shadow(0 24px 50px rgba(0,0,0,.5));
+    }
+    #mobile-screen .phone-stage {
+      min-height: auto; height: 100%; padding: 0; background: transparent;
+    }
+    #mobile-screen .phone {
+      width: 100%;
+      height: 100%;
+      max-height: calc(100vh - 190px);
+      display: flex; flex-direction: column;
+    }
+    #mobile-screen .phone-screen {
+      min-height: 0;
+      flex: 1;
+      max-height: calc(100vh - 210px);
+    }
+    #mobile-screen .phone-body {
+      min-height: 0;
+    }
+    #mobile-screen .phone-bottom,
+    #mobile-screen .phone-top,
+    #mobile-screen .phone-nav {
+      flex-shrink: 0;
+    }
+
+    .laptop {
+      width: min(1180px, 96vw);
+      filter: drop-shadow(0 28px 60px rgba(0,0,0,.55));
+    }
+    .laptop-lid {
+      border-radius: 14px 14px 8px 8px;
+      background: linear-gradient(180deg, #1f2937, #0f172a);
+      padding: 10px 10px 8px;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .laptop-camera {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #334155; margin: 0 auto 8px;
+      box-shadow: inset 0 0 0 2px #1e293b;
+    }
+    .laptop-screen {
+      position: relative;
+      height: min(68vh, 720px);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #F1F5F9;
+      color: var(--ink);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+    .laptop-base {
+      height: 12px; margin: 0 auto;
+      width: 104%;
+      margin-left: -2%;
+      border-radius: 0 0 16px 16px;
+      background: linear-gradient(180deg, #334155, #1e293b);
+      box-shadow: 0 8px 0 #0b1220;
+    }
+    .laptop-notch {
+      width: 18%; height: 5px; margin: -5px auto 0;
+      border-radius: 0 0 8px 8px; background: #0f172a;
+    }
+
+    #app-screen {
+      position: absolute; inset: 0;
+      overflow: auto;
+      background: #F1F5F9;
+    }
+    #app-screen::-webkit-scrollbar { width: 8px; }
+    #app-screen::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+
+    .app-shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100%; }
+    .app-side {
+      background: #fff; border-right: 1px solid var(--line);
+      padding: 14px 12px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 8px 14px; border-bottom: 1px solid var(--line); margin-bottom: 10px;
+    }
+    .brand img { width: 34px; height: 34px; object-fit: contain; }
+    .brand strong { display: block; font-size: 13px; color: var(--ink); }
+    .brand span { font-size: 11px; color: var(--muted); }
+    .nav-label {
+      margin: 10px 8px 4px; font-size: 10px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase; color: #94a3b8;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 10px; border-radius: 10px;
+      font-size: 13px; color: #475569;
+    }
+    .nav-item.active { background: var(--theme-soft); color: var(--theme); font-weight: 700; }
+    .app-main { padding: 14px 16px 20px; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-bottom: 14px;
+    }
+    .search {
+      flex: 1; max-width: 420px; display: flex; align-items: center; gap: 8px;
+      background: #fff; border: 1px solid var(--line); border-radius: 12px;
+      padding: 9px 12px; color: #94a3b8; font-size: 13px;
+    }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .icon-btn {
+      width: 34px; height: 34px; border-radius: 10px; background: #fff;
+      border: 1px solid var(--line); display: grid; place-items: center; color: #64748b;
+    }
+    .user-chip {
+      width: 34px; height: 34px; border-radius: 999px;
+      background: var(--theme); color: #fff; display: grid; place-items: center;
+      font-size: 12px; font-weight: 700;
+    }
+    .page-head h1 { margin: 0; font-size: 24px; color: var(--ink); }
+    .page-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .crumb { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+    .crumb b { color: var(--theme); font-weight: 600; }
+
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 14px 0;
+    }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+      box-shadow: 0 1px 2px rgba(15,23,42,.04);
+    }
+    .kpi-label { font-size: 12px; color: var(--muted); }
+    .kpi-value { font-size: 28px; font-weight: 700; margin-top: 6px; color: var(--ink); }
+    .kpi-note { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    }
+    .pill.blue { background: #dbeafe; color: #1d4ed8; }
+    .pill.orange { background: #ffedd5; color: #c2410c; }
+    .pill.green { background: #d1fae5; color: #047857; }
+    .pill.indigo { background: #e0e7ff; color: #4338ca; }
+    .lower-grid { display: grid; grid-template-columns: 1.3fr .9fr; gap: 12px; }
+    table.app-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.app-table th {
+      text-align: left; color: #64748b; font-weight: 600;
+      padding: 8px 6px; border-bottom: 1px solid var(--line);
+    }
+    table.app-table td {
+      padding: 10px 6px; border-bottom: 1px solid #f1f5f9; color: #334155;
+    }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field label {
+      display: block; font-size: 12px; font-weight: 600; color: #464554; margin-bottom: 6px;
+    }
+    .field label em { color: #ef4444; font-style: normal; }
+    .field input, .field select, .field textarea {
+      width: 100%; border: 1px solid #c7c4d7b3; border-radius: 10px;
+      padding: 10px 12px; font-size: 13px; color: var(--ink); background: #fff;
+      outline: none; transition: border-color .2s, box-shadow .2s, background .25s;
+    }
+    .field textarea { min-height: 72px; resize: none; }
+    .field.is-fill input, .field.is-fill select, .field.is-fill textarea {
+      border-color: var(--theme);
+      box-shadow: 0 0 0 3px rgba(69,71,208,.16);
+      background: #f8f8ff;
+    }
+    .field.is-done input, .field.is-done select, .field.is-done textarea {
+      border-color: #86efac; background: #f0fdf4; box-shadow: none;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 0; border-radius: 10px; padding: 10px 14px;
+      font-size: 13px; font-weight: 700; cursor: default;
+    }
+    .btn-primary { background: var(--theme); color: #fff; }
+    .btn-outline { background: #fff; color: #334155; border: 1px solid var(--line); }
+    .btn-ok { background: #059669; color: #fff; }
+    .btn-danger { background: #fee2e2; color: #b91c1c; }
+
+    .users-list { display: grid; gap: 8px; margin-top: 12px; }
+    .user-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 12px; background: #fff;
+      border: 1px solid var(--line); font-size: 12px;
+    }
+    .user-row .av {
+      width: 34px; height: 34px; border-radius: 999px; display: grid; place-items: center;
+      background: var(--theme-soft); color: var(--theme); font-weight: 700;
+    }
+    .device-strip {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;
+    }
+    .device-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 10px; border-radius: 999px; background: #eff6ff;
+      color: #1d4ed8; font-size: 11px; font-weight: 600;
+    }
+
+    .stepper {
+      display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 14px;
+    }
+    .stepper .s {
+      padding: 6px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
+      background: #e2e8f0; color: #64748b;
+    }
+    .stepper .s.on { background: var(--theme); color: #fff; }
+    .stepper .s.done { background: #d1fae5; color: #047857; }
+
+    .metric-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0;
+    }
+    .metric {
+      border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fff;
+    }
+    .metric .k { font-size: 11px; color: #94a3b8; font-weight: 600; }
+    .metric .v { margin-top: 4px; font-size: 14px; font-weight: 700; color: #0f172a; }
+    .metric.hl {
+      border-color: rgba(69,71,208,.3); background: var(--theme-soft);
+    }
+    .comment-box {
+      border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fff;
+      font-size: 12px; color: #475569; margin-top: 10px;
+    }
+    .upload-flow { display: grid; gap: 10px; }
+    .upload-step {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: #fff;
+      opacity: .45; transform: translateY(4px);
+      transition: .35s ease;
+    }
+    .upload-step.on { opacity: 1; transform: none; border-color: rgba(69,71,208,.35); box-shadow: 0 0 0 3px rgba(69,71,208,.1); }
+    .upload-step.done { opacity: 1; border-color: #86efac; background: #f0fdf4; }
+    .upload-num {
+      width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center;
+      background: var(--theme-soft); color: var(--theme); font-weight: 700; font-size: 12px; flex-shrink: 0;
+    }
+    .upload-step.done .upload-num { background: #d1fae5; color: #047857; }
+
+    #caption-bar {
+      position: absolute; left: 50%; bottom: 70px; transform: translateX(-50%);
+      width: min(820px, 92vw); z-index: 8;
+      background: rgba(7,10,14,.88); border: 1px solid rgba(255,255,255,.1);
+      backdrop-filter: blur(10px); border-radius: 16px; padding: 12px 16px;
+      box-shadow: 0 16px 40px rgba(0,0,0,.35);
+    }
+    #caption-kicker {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: #53B8FF;
+    }
+    #caption-title { margin-top: 4px; font-size: 16px; font-weight: 700; color: #F8FAFC; }
+    #caption-text { margin-top: 4px; font-size: 13px; color: #cbd5e1; line-height: 1.45; }
+
+    #step-nav {
+      position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+      z-index: 9; display: flex; align-items: center; gap: 10px;
+      background: rgba(15,23,42,.9); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px; padding: 8px 10px;
+    }
+    .nav-btn {
+      width: 40px; height: 40px; border-radius: 999px; border: 0;
+      background: #1e293b; color: #e2e8f0; font-size: 16px; cursor: pointer;
+    }
+    .nav-btn:disabled { opacity: .35; cursor: default; }
+    .nav-btn:not(:disabled):hover { background: #334155; }
+    #step-ind { min-width: 110px; text-align: center; font-size: 12px; color: #cbd5e1; }
+    #step-ind strong { color: #fff; }
+
+    #device-orbit {
+      position: absolute; inset: 0; z-index: 6; pointer-events: none;
+      opacity: 0; transition: opacity .4s ease;
+    }
+    #device-orbit.is-on { opacity: 1; }
+    .orbit-device {
+      position: absolute; width: 160px;
+      background: rgba(15,23,42,.92); border: 1px solid rgba(255,255,255,.14);
+      border-radius: 16px; padding: 10px; color: #fff;
+      box-shadow: 0 16px 36px rgba(0,0,0,.35);
+      transform: scale(.92); opacity: 0;
+      transition: .45s cubic-bezier(.22,1,.36,1);
+    }
+    #device-orbit.is-on .orbit-device { transform: none; opacity: 1; }
+    .orbit-device .role { font-size: 10px; color: #93c5fd; letter-spacing: .08em; text-transform: uppercase; }
+    .orbit-device .name { font-size: 13px; font-weight: 700; margin-top: 2px; }
+    .orbit-device .msg {
+      margin-top: 8px; font-size: 11px; line-height: 1.35; color: #cbd5e1;
+      background: rgba(255,255,255,.06); border-radius: 10px; padding: 8px;
+    }
+    .orbit-device .toast {
+      margin-top: 8px; display: inline-flex; align-items: center; gap: 6px;
+      font-size: 10px; font-weight: 700; color: #86efac;
+    }
+    .orbit-device.is-desktop { border-color: rgba(83,184,255,.35); }
+    .orbit-device.is-mobile { border-color: rgba(244,158,11,.4); }
+    .d1 { left: 3%; top: 14%; transition-delay: .05s; }
+    .d2 { right: 3%; top: 12%; transition-delay: .12s; }
+    .d3 { left: 4%; bottom: 22%; transition-delay: .18s; }
+    .d4 { right: 4%; bottom: 24%; transition-delay: .24s; }
+    .d5 { left: 22%; top: 8%; transition-delay: .3s; }
+
+    #hq-intro-overlay {
+      position: absolute; inset: 0; z-index: 4;
+      display: grid; place-items: center;
+      pointer-events: none; opacity: 0; transition: opacity .4s ease;
+    }
+    #hq-intro-overlay.is-on { opacity: 1; }
+    .hq-intro-card {
+      text-align: center; padding: 18px 22px; border-radius: 18px;
+      background: rgba(7,10,14,.82); border: 1px solid rgba(83,184,255,.35);
+      box-shadow: 0 20px 50px rgba(0,0,0,.4);
+    }
+    .hq-intro-card .sta {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-radius: 999px; background: rgba(83,184,255,.12);
+      color: #A6DFFF; font-weight: 700; font-size: 13px; margin-bottom: 10px;
+    }
+    .hq-intro-card h2 { margin: 0; font-size: 22px; }
+    .hq-intro-card p { margin: 6px 0 0; color: #94a3b8; font-size: 13px; }
+
+    #finale-overlay {
+      position: absolute; inset: 0; z-index: 7;
+      display: grid; place-items: center; padding: 18px 14px 108px;
+      pointer-events: none; opacity: 0; visibility: hidden;
+      background: rgba(15, 23, 42, .42);
+      backdrop-filter: blur(4px);
+      transition: opacity .7s ease, visibility .7s ease;
+    }
+    #finale-overlay.is-on {
+      opacity: 1; visibility: visible; pointer-events: auto;
+    }
+    .finale-panel {
+      width: min(720px, 96vw); max-height: calc(100vh - 130px); overflow: auto;
+      border-radius: 18px; padding: 22px 22px 18px;
+      background: #F7F8FC;
+      border: 1px solid #E5E7EF;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, .22);
+      color: #1e293b;
+      transform: translateY(14px) scale(.985);
+      opacity: 0;
+      transition: .65s cubic-bezier(.22,1,.36,1);
+    }
+    #finale-overlay.is-on .finale-panel {
+      transform: none; opacity: 1;
+    }
+    .finale-eyebrow {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: #4547D0; margin-bottom: 8px;
+    }
+    .finale-panel h2 {
+      margin: 0; font-size: clamp(18px, 2.8vw, 24px); font-weight: 800; color: #0f172a; line-height: 1.3;
+    }
+    .finale-lead {
+      margin: 10px 0 0; font-size: 14.5px; line-height: 1.55; color: #475569;
+    }
+    .finale-lead b { color: #0f172a; }
+    .finale-note {
+      margin-top: 12px; padding: 12px 14px; border-radius: 12px;
+      background: #EEF2FF; border: 1px solid #C7D2FE;
+      font-size: 13.5px; line-height: 1.5; color: #312e81;
+    }
+    .finale-note strong { color: #1e1b4b; }
+    .finale-section-title {
+      margin: 16px 0 8px; font-size: 12px; font-weight: 800;
+      letter-spacing: .08em; text-transform: uppercase; color: #64748b;
+    }
+    .finale-easy {
+      display: grid; gap: 8px;
+    }
+    @media (min-width: 700px) {
+      .finale-easy { grid-template-columns: 1fr 1fr; }
+      .finale-card.wide { grid-column: 1 / -1; }
+    }
+    .finale-card {
+      padding: 12px 13px; border-radius: 12px;
+      background: #fff; border: 1px solid #E5E7EF;
+    }
+    .finale-card .who {
+      font-size: 13px; font-weight: 800; color: #1e293b; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .finale-card .who i { color: #4547D0; }
+    .finale-card .ex {
+      display: grid; gap: 4px; font-size: 13px; line-height: 1.45; color: #334155;
+    }
+    .finale-card .ex b { color: #0f172a; font-weight: 700; }
+    .finale-card .was { color: #64748b; }
+    .finale-card .now { color: #166534; }
+    .finale-aim {
+      margin-top: 14px; padding: 14px 14px; border-radius: 12px;
+      background: #ECFDF5; border: 1px solid #A7F3D0;
+      text-align: center;
+    }
+    .finale-aim .label {
+      font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: #047857; margin-bottom: 4px;
+    }
+    .finale-aim p {
+      margin: 0; font-size: 14px; line-height: 1.5; color: #065f46;
+    }
+    .finale-aim strong { color: #064e3b; }
+    .finale-foot {
+      margin-top: 12px; font-size: 12.5px; color: #64748b; text-align: center; line-height: 1.45;
+    }
+    .net-site-dot {
+      width: 11px; height: 11px; border-radius: 50%;
+      background: #F49E0B; border: 2px solid #fff;
+      box-shadow: 0 0 0 3px rgba(244,158,11,.28);
+    }
+    .net-site-label {
+      margin-top: 5px; padding: 4px 7px; border-radius: 8px;
+      background: rgba(7,10,14,.9); border: 1px solid rgba(244,158,11,.4);
+      color: #ffe8c2; font-size: 10px; font-weight: 700; white-space: nowrap;
+      text-align: center;
+    }
+
+    .site-tabs {
+      display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px;
+    }
+    .site-tabs .tab {
+      padding: 7px 11px; border-radius: 999px; font-size: 11px; font-weight: 700;
+      background: #e2e8f0; color: #64748b;
+    }
+    .site-tabs .tab.on { background: var(--theme); color: #fff; }
+    .progress-track {
+      height: 8px; border-radius: 99px; background: #e2e8f0; overflow: hidden; margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, #4547D0, #818cf8);
+    }
+    .gallery-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px;
+    }
+    .gallery-item {
+      border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+      background: #0f172a; position: relative; min-height: 84px;
+    }
+    .gallery-item img { width: 100%; height: 84px; object-fit: cover; display: block; }
+    .gallery-item .cap {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 5px 7px; font-size: 10px; color: #fff;
+      background: linear-gradient(transparent, rgba(0,0,0,.75));
+    }
+    .photo-drop {
+      border: 1.5px dashed #c7c4d7; border-radius: 14px; padding: 16px;
+      background: #f8fafc; text-align: center; color: #64748b; font-size: 12px;
+    }
+    .photo-drop img {
+      width: 100%; max-height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 8px;
+    }
+    .mini-map {
+      height: 120px; border-radius: 12px; overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(69,71,208,.18), rgba(83,184,255,.12)),
+        url("assets/sites/multan-dha.jpg") center/cover;
+      border: 1px solid var(--line); position: relative;
+    }
+    .mini-map .pin {
+      position: absolute; left: 52%; top: 46%; transform: translate(-50%,-50%);
+      background: rgba(15,23,42,.88); color: #fff; font-size: 10px; font-weight: 700;
+      padding: 6px 8px; border-radius: 999px; border: 1px solid rgba(83,184,255,.45);
+    }
+    .reject-reason {
+      margin-top: 4px; font-size: 11px; color: #b91c1c; background: #fef2f2;
+      border-radius: 8px; padding: 6px 8px;
+    }
+    .timeline {
+      position: relative; margin-top: 8px; padding-left: 18px;
+    }
+    .timeline::before {
+      content: ""; position: absolute; left: 5px; top: 4px; bottom: 4px;
+      width: 2px; background: #e2e8f0;
+    }
+    .tl-item {
+      position: relative; padding: 0 0 14px 14px;
+    }
+    .tl-item:last-child { padding-bottom: 0; }
+    .tl-item::before {
+      content: ""; position: absolute; left: -16px; top: 5px;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #cbd5e1; border: 2px solid #fff;
+      box-shadow: 0 0 0 2px #e2e8f0;
+    }
+    .tl-item.done::before { background: #059669; box-shadow: 0 0 0 2px #a7f3d0; }
+    .tl-item.current::before { background: #4547D0; box-shadow: 0 0 0 2px #c7d2fe; }
+    .tl-item.upcoming::before { background: #f59e0b; box-shadow: 0 0 0 2px #fde68a; }
+    .tl-date { font-size: 10px; font-weight: 700; color: #94a3b8; letter-spacing: .04em; text-transform: uppercase; }
+    .tl-title { font-size: 13px; font-weight: 700; color: #0f172a; margin-top: 2px; }
+    .tl-detail { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .stage-block { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; background: #fff; }
+    .stage-block h4 { margin: 0; font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+    .daily-subtabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+    .daily-subtabs .tab { background: #fff; border: 1px solid var(--line); }
+
+    .phone-stage {
+      min-height: 100%; display: grid; place-items: center;
+      background: linear-gradient(180deg, #0f172a, #1e293b);
+      padding: 18px 12px 28px;
+    }
+    .phone {
+      width: min(340px, 92%);
+      border-radius: 28px;
+      background: #0b1220;
+      padding: 10px;
+      box-shadow: 0 24px 50px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+    .phone-notch {
+      width: 34%; height: 18px; margin: 0 auto 8px;
+      border-radius: 999px; background: #020617;
+    }
+    .phone-screen {
+      background: #F1F5F9; color: var(--ink);
+      border-radius: 20px; overflow: hidden; min-height: 420px;
+      display: flex; flex-direction: column;
+    }
+    .phone-top {
+      background: #fff; border-bottom: 1px solid var(--line);
+      padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      flex-shrink: 0;
+    }
+    .phone-top h3 { margin: 0; font-size: 14px; }
+    .phone-body { padding: 12px; flex: 1; overflow: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+    .phone-bottom {
+      padding: 10px 12px 14px; background: #fff; border-top: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .add-request-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--theme); color: #fff; border: 0; border-radius: 10px;
+      padding: 8px 12px; font-size: 12px; font-weight: 700;
+      box-shadow: 0 8px 18px rgba(69,71,208,.28);
+      animation: addPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes addPulse {
+      0%,100% { transform: scale(1); box-shadow: 0 8px 18px rgba(69,71,208,.28); }
+      50% { transform: scale(1.04); box-shadow: 0 10px 24px rgba(69,71,208,.45); }
+    }
+    .field.is-locked label::after { content: " · auto"; color: #94a3b8; font-weight: 500; }
+    .field.is-locked input { background: #f8fafc; color: #475569; }
+    .field.is-min input {
+      border-color: var(--theme); background: #f8f8ff;
+      box-shadow: 0 0 0 3px rgba(69,71,208,.16);
+    }
+    .push-toast {
+      margin: 10px; border-radius: 14px; background: rgba(15,23,42,.94); color: #fff;
+      padding: 10px 12px; border: 1px solid rgba(255,255,255,.1);
+      box-shadow: 0 12px 28px rgba(0,0,0,.35);
+    }
+    .push-toast .app { font-size: 10px; color: #93c5fd; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .push-toast .title { font-size: 13px; font-weight: 700; margin-top: 3px; }
+    .push-toast .body { font-size: 11px; color: #cbd5e1; margin-top: 2px; line-height: 1.35; }
+    .lock-bg {
+      flex: 1; display: grid; place-items: center;
+      background: radial-gradient(circle at 50% 30%, #334155, #0f172a 70%);
+      color: #e2e8f0; text-align: center; padding: 20px;
+    }
+    .phone-nav {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+      padding: 8px 6px calc(8px + env(safe-area-inset-bottom, 0px));
+      background: #fff; border-top: 1px solid var(--line);
+    }
+    .phone-nav .n {
+      text-align: center; font-size: 9px; color: #94a3b8; font-weight: 600;
+    }
+    .phone-nav .n i { display: block; font-size: 14px; margin-bottom: 3px; }
+    .phone-nav .n.on { color: var(--theme); }
+    .cam-box {
+      border: 1.5px dashed #c7c4d7; border-radius: 14px; overflow: hidden;
+      background: #0f172a; position: relative; min-height: 150px;
+    }
+    .cam-box img { width: 100%; height: 150px; object-fit: cover; display: block; }
+    .cam-actions {
+      display: flex; gap: 8px; margin-top: 8px;
+    }
+    .cam-actions .btn { flex: 1; justify-content: center; padding: 9px 10px; font-size: 12px; }
+    .cam-badge {
+      position: absolute; left: 8px; top: 8px;
+      background: rgba(15,23,42,.82); color: #fff; font-size: 10px; font-weight: 700;
+      padding: 4px 8px; border-radius: 999px;
+    }
+    .sup-dash-card {
+      background: #fff; border: 1px solid var(--line); border-radius: 14px;
+      padding: 12px; margin-bottom: 10px;
+    }
+
+    @media (max-width: 980px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .app-side { display: none; }
+      .kpi-grid, .lower-grid, .form-grid, .metric-grid { grid-template-columns: 1fr 1fr; }
+      #laptop-stage { padding-bottom: 96px; }
+      .orbit-device { width: 130px; }
+    }
+    @media (max-width: 640px) {
+      .kpi-grid, .lower-grid, .form-grid, .metric-grid { grid-template-columns: 1fr; }
+      #caption-bar { bottom: 78px; }
+      #mobile-stage { padding-bottom: 198px; }
+      #mobile-screen,
+      #mobile-screen .phone,
+      #mobile-screen .phone-screen {
+        max-height: calc(100vh - 210px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="boot-screen">
+    <div class="boot-stack">
+      <i class="fa-solid fa-power-off" style="font-size:28px;color:#C5D4E2"></i>
+      <div class="boot-title">System Core Loading</div>
+      <div class="boot-track"><div id="boot-bar"></div></div>
+      <div class="boot-status" id="boot-status">PREPARING DEMO...</div>
+    </div>
+  </div>
+
+  <div id="power-station">
+    <div class="power-logo"><img src="assets/sb-logo-white.png" alt="SB" /></div>
+    <div>
+      <button id="power-btn" type="button" aria-label="Start STA demo"><i class="fa-solid fa-power-off"></i></button>
+      <div class="power-hint">Start Site Tracking Demo</div>
+    </div>
+  </div>
+
+  <div id="demo-stage" aria-hidden="true">
+    <div id="map-layer" class="is-focus">
+      <div id="ops-map"></div>
+      <div id="map-offline">Connect network for live Pakistan map</div>
+    </div>
+
+    <div id="hq-intro-overlay">
+      <div class="hq-intro-card">
+        <div class="sta"><i class="fa-solid fa-rocket"></i> STA · Site Tracking App</div>
+        <h2>Syed Brothers Head Office</h2>
+        <p>Lahore DHA Phase 5 · App open ho rahi hai...</p>
+      </div>
+    </div>
+
+    <div id="device-orbit"></div>
+
+    <div id="finale-overlay" aria-hidden="true">
+      <div class="finale-panel">
+        <div class="finale-eyebrow"><i class="fa-solid fa-circle-info"></i> STA · Important Information</div>
+        <h2>Yeh sirf 1–2 features ka demo tha</h2>
+        <p class="finale-lead">
+          Abhi aap ne sirf <b>ek simple flow</b> dekha: site create → request → approve → receive → daily update.
+          Ye poori app nahi hai.
+        </p>
+        <div class="finale-note">
+          App mein <strong>bohot se aur features</strong> hain jo daily operations smooth banate hain —
+          material control, timeline tracking, multi-site visibility, approvals, photos, issues, aur zyada.
+          Matlab roz ka kaam tez, clear, aur controlled.
+        </div>
+
+        <div class="finale-section-title">Real examples — system kis tarah help karta hai</div>
+        <div class="finale-easy">
+          <div class="finale-card">
+            <div class="who"><i class="fa-solid fa-hard-hat"></i> Supervisor</div>
+            <div class="ex">
+              <div class="was">Pehle: call — “cement kitna bacha?”</div>
+              <div class="now">Ab: app pe exact — <b>Cement remaining 40 bag</b></div>
+              <div>Jaldi faisla: request chahiye ya nahi. Timeline pe kaam.</div>
+            </div>
+          </div>
+          <div class="finale-card">
+            <div class="who"><i class="fa-solid fa-cart-shopping"></i> Purchaser</div>
+            <div class="ex">
+              <div class="was">Pehle: WhatsApp pe qty, galat / double buy</div>
+              <div class="now">Ab: sirf approved qty release — jaise <b>Bricks 3000</b></div>
+              <div>Sahi kharid, kam waste, site pe time pe saman.</div>
+            </div>
+          </div>
+          <div class="finale-card">
+            <div class="who"><i class="fa-solid fa-calculator"></i> Accounts</div>
+            <div class="ex">
+              <div class="was">Pehle: paper / late bills, unclear cost</div>
+              <div class="now">Ab: har request ka <b>clear trail</b> — approve / reject with notes</div>
+              <div>Budget control asaan, records ready.</div>
+            </div>
+          </div>
+          <div class="finale-card">
+            <div class="who"><i class="fa-solid fa-user-shield"></i> Admin</div>
+            <div class="ex">
+              <div class="was">Pehle: har site alag story, status late</div>
+              <div class="now">Ab: dashboard pe <b>sab sites live</b> — Multan se Karachi tak</div>
+              <div>Ek nazar mein progress, requests, issues.</div>
+            </div>
+          </div>
+          <div class="finale-card wide">
+            <div class="who"><i class="fa-solid fa-building"></i> Company (Syed Brothers)</div>
+            <div class="ex">
+              <div class="was">Pehle: delays, confusion, client ko late update</div>
+              <div class="now">Ab: HQ + field ek digital system — <b>on-time delivery</b> possible</div>
+              <div>Teams aligned → project timeline pe → client happy.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="finale-aim">
+          <div class="label">Main Aim</div>
+          <p>
+            Hamara goal <strong>Client Satisfaction</strong> hai —
+            sahi data, smooth operations, aur time pe delivery se client ko better experience milta hai.
+          </p>
+        </div>
+        <div class="finale-foot">
+          Yeh demo tip of the iceberg hai — STA aapki regular operations ko optimize karta hai.
+        </div>
+      </div>
+    </div>
+
+    <div id="laptop-stage">
+      <div class="laptop">
+        <div class="laptop-lid">
+          <div class="laptop-camera"></div>
+          <div class="laptop-screen">
+            <div id="app-screen"></div>
+          </div>
+        </div>
+        <div class="laptop-base"></div>
+        <div class="laptop-notch"></div>
+      </div>
+    </div>
+
+    <div id="mobile-stage" aria-hidden="true">
+      <div id="mobile-screen"></div>
+    </div>
+
+    <div id="caption-bar">
+      <div id="caption-kicker">STA Demo</div>
+      <div id="caption-title">Ready</div>
+      <div id="caption-text">Next / Previous se flow chalao.</div>
+    </div>
+
+    <div id="step-nav">
+      <button class="nav-btn" id="step-prev" type="button" aria-label="Previous">&#8592;</button>
+      <div id="step-ind"><strong>Step 1</strong><span> / 1</span></div>
+      <button class="nav-btn" id="step-next" type="button" aria-label="Next">&#8594;</button>
+    </div>
+  </div>
+
+  <script>
+    const DEMO = {
+      hq: {
+        name: "Syed Brothers Head Office",
+        city: "Lahore",
+        place: "DHA Phase 5",
+        lat: 31.4698,
+        lng: 74.4095
+      },
+      site: {
+        name: "DHA Multan Phase 1",
+        address: "Plot 12, DHA Multan Phase 1, Multan",
+        client_name: "Mr. Hassan",
+        city: "Multan",
+        province: "Punjab",
+        plot_size: "10 Marla",
+        covered_area: "2200 sq ft",
+        location_url: "https://maps.google.com/?q=30.1345,71.5488",
+        marketing_person_name: "Ali Marketing",
+        marketing_person_phone: "0300-1234567",
+        start_date: "2026-01-15",
+        end_date: "2026-12-31",
+        status: "data uploading",
+        lat: 30.1345,
+        lng: 71.5488,
+        supervisors: "Kashif Mehmood",
+        purchasers: "Hamza Purchase",
+        seniorEngineers: "Usman SE"
+      },
+      users: [
+        { role: "qa", name: "Ayesha QA", city: "Lahore HQ", email: "ayesha.qa@sb.demo", password: "Sb@Qa123", gender: "female", status: "active", device: "Desktop", initials: "AQ" },
+        { role: "account", name: "Bilal Account", city: "Lahore HQ", email: "bilal.account@sb.demo", password: "Sb@Acc123", gender: "male", status: "active", device: "Desktop", initials: "BA" },
+        { role: "purchaser", name: "Hamza Purchase", city: "Lahore HQ", email: "hamza.purchase@sb.demo", password: "Sb@Pur123", gender: "male", status: "active", device: "Desktop", initials: "HP" },
+        { role: "supervisor", name: "Kashif Mehmood", city: "Multan", email: "kashif.sup@sb.demo", password: "Sb@Sup123", gender: "male", status: "active", device: "Mobile", initials: "KM" },
+        { role: "sr_engineer", name: "Usman SE", city: "Multan", email: "usman.se@sb.demo", password: "Sb@Se123", gender: "male", status: "active", device: "Mobile", initials: "US" }
+      ],
+      request: {
+        id: "MR-MUL-001",
+        product: "Bricks",
+        unit: "no",
+        qty: 3000,
+        stage: "Grey Structure",
+        priority: "medium",
+        remaining: 3000,
+        need: 5000,
+        used: 2000,
+        released: 3000,
+        received: 3000,
+        datetime: "16/10/2026 · 10:42 AM",
+        vendor: "Multan Bricks Co",
+        comments: {
+          supervisor: "Grey structure ke liye bricks darkar hain",
+          qa: "Quota check OK · approve",
+          account: "Budget within limit · approve",
+          purchaser: "Released 3000 · Multan Bricks Co",
+          receiving: "Site pe 3000 receive ho gaye"
+        }
+      },
+      daily: {
+        date: "18/10/2026",
+        stage: "Grey Structure",
+        progressPct: 42,
+        title: "Grey structure columns shuttering",
+        description: "Aaj columns ki shuttering complete hui. Concrete pour kal subah planned hai. Site photos attach ki hain daily record ke liye.",
+        photo: "assets/sites/multan-dha.jpg",
+        photoName: "daily-progress-1810.jpg"
+      },
+      issue: {
+        id: "ISS-MUL-014",
+        type: "Timeline Delay",
+        issueType: "labour_issue",
+        status: "open",
+        priority: "high",
+        date: "19/10/2026",
+        stage: "Grey Structure",
+        title: "Labour shortage se timeline exceed",
+        explanation: "Skilled labour kam hone ki wajah se grey structure 4 din late chal raha hai. Concrete pour delay ho sakta hai. HQ se extra labour / decision chahiye.",
+        impact: "End date risk · +4 days",
+        photo: "assets/sites/supervisor-app.jpg",
+        notifyRoles: "Admin, QA, SR Engineer, Director"
+      },
+      materials: [
+        { name: "Bricks", unit: "no", total: 5000, used: 3000, remaining: 2000, extra: 0 },
+        { name: "Cement", unit: "bag", total: 400, used: 180, remaining: 220, extra: 20 },
+        { name: "Steel", unit: "kg", total: 8500, used: 4288, remaining: 4212, extra: 0 },
+        { name: "Sand", unit: "cft", total: 2000, used: 1050, remaining: 950, extra: 0 }
+      ],
+      requestHistory: [
+        { id: "MR-MUL-001", product: "Bricks", qty: "3000 no", stage: "Grey Structure", status: "Approved", when: "16/10 · Created → QA → Account → Purchase → Received", note: "Full pipeline complete" },
+        { id: "MR-MUL-002", product: "Cement", qty: "80 bag", stage: "Grey Structure", status: "Rejected", when: "17/10 · QA rejected", note: "Reject reason: Stage quota already covered · pehle remaining cement use karein" },
+        { id: "MR-MUL-003", product: "Steel", qty: "1200 kg", stage: "Grey Structure", status: "In Progress", when: "18/10 · Account pending", note: "QA approved · Account review" }
+      ],
+      agreements: [
+        { name: "Client Agreement.pdf", category: "Agreement", date: "12/01/2026", note: "Signed client contract" },
+        { name: "Payment Schedule.pdf", category: "Agreement", date: "12/01/2026", note: "Milestone payment terms" },
+        { name: "Architectural Plan.pdf", category: "Design", date: "14/01/2026", note: "Floor plans + elevations" },
+        { name: "Structural Drawing.pdf", category: "Design", date: "14/01/2026", note: "Columns / beams / slabs" },
+        { name: "MEP Layout.pdf", category: "Design", date: "15/01/2026", note: "Electrical + plumbing" },
+        { name: "Soil Test Report.pdf", category: "Asset", date: "10/01/2026", note: "Foundation decision support" },
+        { name: "BOQ Summary.xlsx", category: "Asset", date: "16/01/2026", note: "Qty baseline for purchase" },
+        { name: "Site Survey Map.pdf", category: "Asset", date: "11/01/2026", note: "Plot boundaries / access" }
+      ],
+      uploadStages: [
+        {
+          stage: "Basement",
+          duration: "21 days",
+          items: [
+            { product: "Cement", unit: "bag", qty: 90 },
+            { product: "Steel", unit: "kg", qty: 1800 },
+            { product: "Sand", unit: "cft", qty: 350 },
+            { product: "Crush", unit: "cft", qty: 280 }
+          ]
+        },
+        {
+          stage: "Ground Floor",
+          duration: "28 days",
+          items: [
+            { product: "Bricks", unit: "no", qty: 1200 },
+            { product: "Cement", unit: "bag", qty: 110 },
+            { product: "Steel", unit: "kg", qty: 1500 },
+            { product: "Sand", unit: "cft", qty: 420 }
+          ]
+        },
+        {
+          stage: "First Floor",
+          duration: "28 days",
+          items: [
+            { product: "Bricks", unit: "no", qty: 1000 },
+            { product: "Cement", unit: "bag", qty: 100 },
+            { product: "Steel", unit: "kg", qty: 2200 },
+            { product: "Binding Wire", unit: "kg", qty: 45 }
+          ]
+        },
+        {
+          stage: "Grey Structure",
+          duration: "35 days",
+          items: [
+            { product: "Bricks", unit: "no", qty: 5000 },
+            { product: "Cement", unit: "bag", qty: 200 },
+            { product: "Steel", unit: "kg", qty: 4500 },
+            { product: "Sand", unit: "cft", qty: 800 }
+          ]
+        }
+      ],
+      gallery: [
+        { src: "assets/sites/multan-dha.jpg", cap: "Daily · 18 Oct · Progress" },
+        { src: "assets/sites/supervisor-app.jpg", cap: "Issue · Labour delay" },
+        { src: "assets/sites/lahore-dha-kk.jpg", cap: "Grey structure view" }
+      ],
+      stagesProgress: [
+        { name: "Basement", pct: 100, status: "Completed" },
+        { name: "Ground Floor", pct: 100, status: "Completed" },
+        { name: "First Floor", pct: 70, status: "In Progress" },
+        { name: "Grey Structure", pct: 42, status: "In Progress" }
+      ],
+      stageMaterials: [
+        {
+          stage: "Basement",
+          status: "Completed",
+          items: [
+            { product: "Cement", unit: "bag", planned: 90, used: 90, remaining: 0 },
+            { product: "Steel", unit: "kg", planned: 1800, used: 1800, remaining: 0 }
+          ]
+        },
+        {
+          stage: "Ground Floor",
+          status: "Completed",
+          items: [
+            { product: "Bricks", unit: "no", planned: 1200, used: 1200, remaining: 0 },
+            { product: "Cement", unit: "bag", planned: 110, used: 110, remaining: 0 }
+          ]
+        },
+        {
+          stage: "First Floor",
+          status: "In Progress",
+          items: [
+            { product: "Bricks", unit: "no", planned: 1000, used: 700, remaining: 300 },
+            { product: "Steel", unit: "kg", planned: 2200, used: 1400, remaining: 800 }
+          ]
+        },
+        {
+          stage: "Grey Structure",
+          status: "In Progress",
+          items: [
+            { product: "Bricks", unit: "no", planned: 5000, used: 3000, remaining: 2000 },
+            { product: "Cement", unit: "bag", planned: 200, used: 70, remaining: 130 },
+            { product: "Steel", unit: "kg", planned: 4500, used: 1088, remaining: 3412 }
+          ]
+        }
+      ],
+      timeline: [
+        { date: "15 Jan 2026", title: "Project Start", detail: "Site created · Data Uploading", state: "done" },
+        { date: "20 Jan 2026", title: "Material Data Upload", detail: "QA stages + totals uploaded", state: "done" },
+        { date: "22 Jan 2026", title: "In Progress", detail: "Site status moved to In Progress", state: "done" },
+        { date: "Feb–Jun 2026", title: "Basement + Ground Floor", detail: "Stages completed", state: "done" },
+        { date: "Jul–Sep 2026", title: "First Floor", detail: "70% complete", state: "current" },
+        { date: "Oct 2026", title: "Grey Structure", detail: "42% · bricks request live / issue open", state: "current" },
+        { date: "31 Dec 2026", title: "Target End Date", detail: "Planned handover · risk +4 days from labour issue", state: "upcoming" }
+      ],
+      dailyPage: {
+        materialNotes: [
+          { date: "16/10", text: "Bricks 3000 request initiate · MR-MUL-001" },
+          { date: "18/10", text: "Steel 1200 kg request Account pending · MR-MUL-003" }
+        ],
+        progressRows: [
+          { date: "16/10", stage: "Grey Structure", pct: 35, note: "Columns marking" },
+          { date: "18/10", stage: "Grey Structure", pct: 42, note: "Shuttering complete" }
+        ],
+        issues: [
+          { id: "ISS-MUL-014", type: "Timeline Delay", status: "Open", text: "Labour shortage · +4 days risk" }
+        ]
+      }
+    };
+
+    const ROLE_LABEL = {
+      qa: "QA",
+      account: "Account",
+      purchaser: "Purchaser",
+      supervisor: "Supervisor",
+      sr_engineer: "SR Engineer",
+      admin: "Admin"
+    };
+
+    let opsMap = null;
+    let markers = {};
+    let stepIndex = 0;
+    let fillTimer = null;
+    let uploadTimer = null;
+    let introTimer = null;
+
+    function esc(v) {
+      return String(v == null ? "" : v)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function sidebar(active) {
+      const items = [
+        ["dashboard", "fa-border-all", "Dashboard"],
+        ["sites", "fa-city", "Sites"],
+        ["users", "fa-users", "User Management"],
+        ["site-mgmt", "fa-building", "Site Management"],
+        ["tasks", "fa-clipboard-list", "Task Management"],
+        ["product", "fa-shapes", "Product"],
+        ["stages", "fa-bars", "Stages"],
+        ["profile", "fa-user", "Profile"]
+      ];
+      return `
+        <aside class="app-side">
+          <div class="brand">
+            <img src="assets/sb-logo.png" alt="SB" />
+            <div><strong>Site Tracking</strong><span>Enterprise</span></div>
+          </div>
+          <div class="nav-label">Portfolio</div>
+          ${items.slice(0,2).map(([k,i,l]) => `<div class="nav-item ${active===k?"active":""}"><i class="fa-solid ${i}"></i>${l}</div>`).join("")}
+          <div class="nav-label">Management</div>
+          ${items.slice(2,5).map(([k,i,l]) => `<div class="nav-item ${active===k?"active":""}"><i class="fa-solid ${i}"></i>${l}</div>`).join("")}
+          <div class="nav-label">Catalog & Stages</div>
+          ${items.slice(5,7).map(([k,i,l]) => `<div class="nav-item ${active===k?"active":""}"><i class="fa-solid ${i}"></i>${l}</div>`).join("")}
+          <div class="nav-label">Account</div>
+          ${items.slice(7).map(([k,i,l]) => `<div class="nav-item ${active===k?"active":""}"><i class="fa-solid ${i}"></i>${l}</div>`).join("")}
+        </aside>`;
+    }
+
+    function topbar() {
+      return `
+        <div class="topbar">
+          <div class="search"><i class="fa-solid fa-magnifying-glass"></i><span>Search sites or users...</span></div>
+          <div class="top-actions">
+            <div class="icon-btn"><i class="fa-solid fa-rotate-right"></i></div>
+            <div class="icon-btn"><i class="fa-solid fa-bell"></i></div>
+            <div class="user-chip">SA</div>
+          </div>
+        </div>`;
+    }
+
+    function shell(active, body) {
+      return `<div class="app-shell">${sidebar(active)}<div class="app-main">${topbar()}${body}</div></div>`;
+    }
+
+    function screenDashboard() {
+      return shell("dashboard", `
+        <div class="page-head">
+          <div class="crumb">Overview / <b>Executive Dashboard</b></div>
+          <h1>Dashboard</h1>
+          <p>Real-time site operations aur material request tracking — Admin view.</p>
+        </div>
+        <div class="kpi-grid">
+          <div class="card"><div class="kpi-label">Total Sites</div><div class="kpi-value">1</div><div class="kpi-note">Multan network ready</div></div>
+          <div class="card"><div class="kpi-label">Data Uploading Sites</div><div class="kpi-value">1</div><div class="kpi-note">DHA Multan Phase 1</div></div>
+          <div class="card"><div class="kpi-label">Complete Sites</div><div class="kpi-value">0</div><div class="kpi-note">Targeting delivery</div></div>
+          <div class="card"><div class="kpi-label">System Health</div><div class="kpi-value">100%</div><div class="kpi-note"><span class="pill blue">Nominal</span></div></div>
+        </div>
+        <div class="lower-grid">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <strong>Sites Overview</strong><span class="pill indigo">1 Active</span>
+            </div>
+            <table class="app-table">
+              <thead><tr><th>Site Name</th><th>Client</th><th>Progress</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>${esc(DEMO.site.name)}</td>
+                  <td>${esc(DEMO.site.client_name)}</td>
+                  <td>0%</td>
+                  <td><span class="pill orange">Data Uploading</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <strong>Latest Material Requests</strong>
+            <div style="margin-top:12px;color:#94a3b8;font-size:12px">Abhi koi request nahi — pehle site setup complete hoga.</div>
+          </div>
+        </div>
+      `);
+    }
+
+    function screenUsers(focusIndex) {
+      const u = DEMO.users[Math.max(0, focusIndex)] || DEMO.users[0];
+      const created = DEMO.users.slice(0, Math.max(0, focusIndex));
+      return shell("users", `
+        <div class="page-head">
+          <div class="crumb">Management / <b>User Management</b></div>
+          <h1>Add User</h1>
+          <p>Admin har role ke users banata hai — credentials representatives ko share hoti hain.</p>
+        </div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <strong>Create User · ${esc(ROLE_LABEL[u.role] || u.role)}</strong>
+            <span class="pill blue">${esc(u.device)}</span>
+          </div>
+          <div class="form-grid" id="user-form">
+            ${field("name", "Full Name", u.name)}
+            ${field("email", "Email", u.email)}
+            ${field("password", "Password", u.password)}
+            ${field("role", "Role", ROLE_LABEL[u.role])}
+            ${field("city", "City / Focus", u.city)}
+            ${field("status", "Status", u.status)}
+          </div>
+          <div class="device-strip">
+            <div class="device-chip"><i class="fa-brands fa-apple"></i> iPhone</div>
+            <div class="device-chip"><i class="fa-brands fa-android"></i> Android</div>
+            <div class="device-chip"><i class="fa-solid fa-laptop"></i> Laptop</div>
+            <div class="device-chip"><i class="fa-solid fa-desktop"></i> Desktop</div>
+          </div>
+          <div style="margin-top:14px"><button class="btn btn-primary" type="button"><i class="fa-solid fa-user-plus"></i> Save User</button></div>
+        </div>
+        <div class="users-list">
+          ${created.map((x) => `
+            <div class="user-row">
+              <div class="av">${esc(x.initials)}</div>
+              <div style="flex:1">
+                <strong>${esc(x.name)}</strong>
+                <div style="color:#64748b">${esc(ROLE_LABEL[x.role])} · ${esc(x.city)} · ${esc(x.email)}</div>
+              </div>
+              <span class="pill green">Shared</span>
+            </div>
+          `).join("")}
+        </div>
+      `);
+    }
+
+    function field(id, label, value) {
+      return `<div class="field" data-field="${esc(id)}"><label>${esc(label)} <em>*</em></label><input value="${esc(value)}" readonly /></div>`;
+    }
+
+    function screenCreateSite() {
+      const s = DEMO.site;
+      return shell("site-mgmt", `
+        <div class="page-head">
+          <div class="crumb">Management / <b>Site Management</b></div>
+          <h1>Create Site</h1>
+          <p>Multan site + decision assets: agreement, drawings, survey, BOQ — sab create ke sath attach.</p>
+        </div>
+        <div class="card">
+          <div class="form-grid" id="site-form">
+            ${field("name", "Site Name", s.name)}
+            ${field("client_name", "Client Name", s.client_name)}
+            ${field("address", "Address", s.address)}
+            ${field("city", "City", s.city)}
+            ${field("province", "Province", s.province)}
+            ${field("plot_size", "Plot Size", s.plot_size)}
+            ${field("covered_area", "Covered Area", s.covered_area)}
+            ${field("location_url", "Location URL", s.location_url)}
+            ${field("marketing_person_name", "Marketing Person", s.marketing_person_name)}
+            ${field("marketing_person_phone", "Marketing Phone", s.marketing_person_phone)}
+            ${field("start_date", "Start Date", s.start_date)}
+            ${field("end_date", "End Date", s.end_date)}
+            ${field("status", "Status", "Data Uploading")}
+            ${field("supervisors", "Supervisor", s.supervisors)}
+            ${field("purchasers", "Purchaser", s.purchasers)}
+            ${field("seniorEngineers", "Senior Engineer", s.seniorEngineers)}
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px" id="site-assets">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
+            <strong>Client Agreement · Drawings · Decision Assets</strong>
+            <span class="pill blue">${DEMO.agreements.length} files</span>
+          </div>
+          <p style="margin:6px 0 0;font-size:12px;color:#64748b">Ye documents site create ke sath add hote hain — later approvals / purchase / issues ke liye context.</p>
+          <div class="users-list" style="margin-top:10px">
+            ${DEMO.agreements.map((a) => `
+              <div class="user-row asset-row">
+                <div class="av"><i class="fa-solid ${a.category === "Agreement" ? "fa-file-contract" : a.category === "Design" ? "fa-drafting-compass" : "fa-folder-open"}"></i></div>
+                <div style="flex:1">
+                  <strong>${esc(a.name)}</strong>
+                  <div style="color:#64748b">${esc(a.category)} · ${esc(a.date)} · ${esc(a.note || "")}</div>
+                </div>
+                <span class="pill green">Attached</span>
+              </div>
+            `).join("")}
+          </div>
+          <div style="margin-top:14px"><button class="btn btn-primary" type="button"><i class="fa-solid fa-plus"></i> Create Site with Assets</button></div>
+        </div>
+      `);
+    }
+
+    function uploadStageTabs(activeIdx) {
+      return `<div class="site-tabs">${DEMO.uploadStages.map((st, i) => `
+        <div class="tab ${i === activeIdx ? "on" : i < activeIdx ? "" : ""}" style="${i < activeIdx ? "background:#d1fae5;color:#047857" : ""}">${i < activeIdx ? "✓ " : ""}${esc(st.stage)}</div>
+      `).join("")}<div class="tab ${activeIdx >= DEMO.uploadStages.length ? "on" : ""}">Totals</div></div>`;
+    }
+
+    function screenQaUpload(activeIdx) {
+      const stages = DEMO.uploadStages;
+      const doneAll = activeIdx >= stages.length;
+      const st = stages[Math.min(activeIdx, stages.length - 1)];
+      const totalsMap = {};
+      stages.forEach((stage) => {
+        stage.items.forEach((it) => {
+          const key = it.product + "|" + it.unit;
+          if (!totalsMap[key]) totalsMap[key] = { product: it.product, unit: it.unit, qty: 0 };
+          totalsMap[key].qty += it.qty;
+        });
+      });
+      const totals = Object.values(totalsMap);
+
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Site / ${esc(DEMO.site.name)} / <b>Material Data Upload</b></div>
+          <h1>QA · Stage Data Upload</h1>
+          <p>Har stage open karke construction materials ka plan set ho raha hai.</p>
+        </div>
+        ${uploadStageTabs(activeIdx)}
+        ${doneAll ? `
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <strong>Total Materials · Site Level</strong>
+              <span class="pill green">Upload Complete</span>
+            </div>
+            <table class="app-table">
+              <thead><tr><th>Product</th><th>Unit</th><th>Total Planned Qty</th><th>Status</th></tr></thead>
+              <tbody>
+                ${totals.map((t) => `
+                  <tr>
+                    <td>${esc(t.product)}</td>
+                    <td>${esc(t.unit)}</td>
+                    <td><b>${t.qty}</b></td>
+                    <td><span class="pill green">Synced</span></td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+            <div class="comment-box" style="margin-top:10px">Basement → Ground → First → Grey Structure ke saare qty totals me merge ho gaye. Ab requests isi quota se chalen gi.</div>
+          </div>
+        ` : `
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <div>
+                <strong>Open Stage · ${esc(st.stage)}</strong>
+                <div style="font-size:12px;color:#64748b;margin-top:2px">Planned duration: ${esc(st.duration)} · ${st.items.length} materials</div>
+              </div>
+              <span class="pill indigo">Editing</span>
+            </div>
+            <table class="app-table">
+              <thead><tr><th>Material</th><th>Unit</th><th>Planned Qty</th><th>Remaining (start)</th><th>Stage</th></tr></thead>
+              <tbody>
+                ${st.items.map((it) => `
+                  <tr>
+                    <td><b>${esc(it.product)}</b></td>
+                    <td>${esc(it.unit)}</td>
+                    <td>${it.qty}</td>
+                    <td>${it.qty}</td>
+                    <td>${esc(st.stage)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-ok" type="button"><i class="fa-solid fa-floppy-disk"></i> Save ${esc(st.stage)}</button>
+              <button class="btn btn-outline" type="button">Next Stage</button>
+            </div>
+          </div>
+        `}
+      `);
+    }
+
+    function requestStepper(active) {
+      const labels = ["Supervisor", "QA", "Account", "Purchaser", "Receiving"];
+      return `<div class="stepper">${labels.map((l, i) => {
+        const cls = i < active ? "done" : i === active ? "on" : "";
+        return `<div class="s ${cls}">${i + 1}. ${l}</div>`;
+      }).join("")}</div>`;
+    }
+
+    function decisionMetrics(extra = "") {
+      const r = DEMO.request;
+      return `
+        <div class="metric-grid">
+          <div class="metric"><div class="k">Date and Time</div><div class="v">${esc(r.datetime)}</div></div>
+          <div class="metric"><div class="k">Stage Name</div><div class="v">${esc(r.stage)}</div></div>
+          <div class="metric"><div class="k">Product / Unit</div><div class="v">${esc(r.product)} (${esc(r.unit)})</div></div>
+          <div class="metric"><div class="k">Requested Qty</div><div class="v">${esc(r.qty)}</div></div>
+          <div class="metric hl"><div class="k">Remaining Material</div><div class="v">${esc(r.remaining)} ${esc(r.unit)}</div></div>
+          <div class="metric"><div class="k">Priority</div><div class="v">${esc(r.priority)}</div></div>
+          ${extra}
+        </div>`;
+    }
+
+    function phoneShell(opts) {
+      const o = opts || {};
+      return `
+        <div class="phone-stage">
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              ${o.top || ""}
+              <div class="phone-body">${o.body || ""}</div>
+              ${o.bottom || ""}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function phoneBottomNav(active) {
+      const items = [
+        ["home", "fa-house", "Home"],
+        ["site", "fa-city", "Site"],
+        ["daily", "fa-camera", "Daily"],
+        ["more", "fa-bars", "More"]
+      ];
+      return `<div class="phone-nav">${items.map(([k, i, l]) => `
+        <div class="n ${active === k ? "on" : ""}"><i class="fa-solid ${i}"></i>${l}</div>
+      `).join("")}</div>`;
+    }
+
+    function screenReceiveMobile() {
+      const r = DEMO.request;
+      return phoneShell({
+        top: `<div class="phone-top">
+            <div>
+              <div style="font-size:10px;color:#94a3b8">Receiving · ${esc(r.id)}</div>
+              <h3>Receive Material</h3>
+            </div>
+            <span class="pill orange">Supervisor</span>
+          </div>`,
+        body: `
+          <div class="metric-grid" style="margin-top:0">
+            <div class="metric"><div class="k">Product</div><div class="v">${esc(r.product)}</div></div>
+            <div class="metric"><div class="k">Stage</div><div class="v">${esc(r.stage)}</div></div>
+            <div class="metric"><div class="k">Released Qty</div><div class="v">${esc(r.released)} ${esc(r.unit)}</div></div>
+            <div class="metric hl"><div class="k">Received Qty</div><div class="v">${esc(r.received)} ${esc(r.unit)}</div></div>
+          </div>
+          <div style="font-size:12px;font-weight:700;margin:10px 0 6px">Receiving Photo</div>
+          <div class="cam-box">
+            <div class="cam-badge"><i class="fa-solid fa-camera"></i> Camera</div>
+            <img src="assets/sites/multan-dha.jpg" alt="Receiving photo" />
+          </div>
+          <div class="cam-actions">
+            <button class="btn btn-outline" type="button"><i class="fa-solid fa-camera"></i> Open Camera</button>
+            <button class="btn btn-primary" type="button"><i class="fa-solid fa-paperclip"></i> Attached</button>
+          </div>
+          <div class="comment-box" style="margin-top:10px">${esc(r.comments.receiving)}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:8px">Rule: received ≥ released → request complete. Photo proof attach zaroori.</div>`,
+        bottom: `<div class="phone-bottom">
+            <button class="btn btn-ok" type="button" style="width:100%;justify-content:center">
+              <i class="fa-solid fa-box-open"></i> Confirm Receive
+            </button>
+          </div>`
+      });
+    }
+
+    function screenSupervisorMobileDailyHome() {
+      const s = DEMO.site;
+      return phoneShell({
+        top: `<div class="phone-top">
+            <div>
+              <div style="font-size:10px;color:#94a3b8">Supervisor · Mobile</div>
+              <h3>${esc(s.name)}</h3>
+            </div>
+            <span class="pill indigo">In Progress</span>
+          </div>`,
+        body: `
+          <div class="sup-dash-card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <strong style="font-size:13px">Site Progress</strong>
+              <span class="pill blue">42%</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" style="width:42%"></div></div>
+            <div style="font-size:11px;color:#64748b;margin-top:6px">Grey Structure · today update pending</div>
+          </div>
+          <div class="sup-dash-card">
+            <strong style="font-size:13px">Daily Update</strong>
+            <div style="display:grid;gap:8px;margin-top:10px">
+              <button class="btn btn-primary" type="button" style="justify-content:flex-start">
+                <i class="fa-solid fa-camera"></i> Image Upload
+              </button>
+              <button class="btn btn-outline" type="button" style="justify-content:flex-start">
+                <i class="fa-solid fa-chart-line"></i> Site Progress
+              </button>
+              <button class="btn btn-outline" type="button" style="justify-content:flex-start">
+                <i class="fa-solid fa-triangle-exclamation"></i> Issues
+              </button>
+            </div>
+          </div>
+          <div class="comment-box" style="border-color:#c7d2fe;background:#eef0ff">
+            Actual supervisor flow: Site open → Daily Update → Image / Progress / Issues.
+          </div>`,
+        bottom: phoneBottomNav("daily")
+      });
+    }
+
+    function screenSupervisorMobileDailyPhoto() {
+      const d = DEMO.daily;
+      return phoneShell({
+        top: `<div class="phone-top">
+            <div>
+              <div style="font-size:10px;color:#94a3b8">Daily Update · Image Upload</div>
+              <h3>Add Daily Photo</h3>
+            </div>
+            <span class="pill orange">Mobile</span>
+          </div>`,
+        body: `
+          <div class="field is-locked"><label>Date</label><input value="${esc(d.date)}" readonly /></div>
+          <div class="field is-locked" style="margin-top:8px"><label>Stage</label><input value="${esc(d.stage)}" readonly /></div>
+          <div class="field is-min" style="margin-top:8px"><label>Progress %</label><input value="${esc(d.progressPct + "%")}" readonly /></div>
+          <div style="font-size:12px;font-weight:700;margin:12px 0 6px">Site Photo</div>
+          <div class="cam-box">
+            <div class="cam-badge"><i class="fa-solid fa-camera"></i> Live Camera</div>
+            <img src="${esc(d.photo)}" alt="Daily photo" />
+          </div>
+          <div class="cam-actions">
+            <button class="btn btn-outline" type="button"><i class="fa-solid fa-camera"></i> Open Camera</button>
+            <button class="btn btn-primary" type="button"><i class="fa-solid fa-check"></i> Captured</button>
+          </div>
+          <div class="field is-min" style="margin-top:10px"><label>Description</label><input value="${esc(d.description)}" readonly /></div>`,
+        bottom: `<div class="phone-bottom">
+            <button class="btn btn-primary" type="button" style="width:100%;justify-content:center">
+              <i class="fa-solid fa-cloud-arrow-up"></i> Save Daily Update
+            </button>
+            ${phoneBottomNav("daily")}
+          </div>`
+      });
+    }
+
+    function screenSupervisorMobileIssue() {
+      const iss = DEMO.issue;
+      return phoneShell({
+        top: `<div class="phone-top">
+            <div>
+              <div style="font-size:10px;color:#94a3b8">Daily Update · Issues</div>
+              <h3>Create Issue</h3>
+            </div>
+            <span class="pill orange">Open</span>
+          </div>`,
+        body: `
+          <div class="field is-locked"><label>Issue Type</label><input value="${esc(iss.type)}" readonly /></div>
+          <div class="field is-locked" style="margin-top:8px"><label>Priority</label><input value="${esc(iss.priority)}" readonly /></div>
+          <div class="field is-locked" style="margin-top:8px"><label>Impact</label><input value="${esc(iss.impact)}" readonly /></div>
+          <div class="field is-min" style="margin-top:8px"><label>Explanation</label><input value="${esc(iss.explanation)}" readonly /></div>
+          <div style="font-size:12px;font-weight:700;margin:12px 0 6px">Evidence Photo</div>
+          <div class="cam-box">
+            <div class="cam-badge"><i class="fa-solid fa-camera"></i> Camera</div>
+            <img src="${esc(iss.photo)}" alt="Issue evidence" />
+          </div>
+          <div class="cam-actions">
+            <button class="btn btn-outline" type="button"><i class="fa-solid fa-camera"></i> Open Camera</button>
+            <button class="btn btn-primary" type="button"><i class="fa-solid fa-paperclip"></i> Attached</button>
+          </div>
+          <div class="comment-box" style="margin-top:10px;border-color:#fcd34d;background:#fffbeb">
+            Notify: ${esc(iss.notifyRoles)}
+          </div>`,
+        bottom: `<div class="phone-bottom">
+            <button class="btn btn-primary" type="button" style="width:100%;justify-content:center">
+              <i class="fa-solid fa-triangle-exclamation"></i> Submit Issue
+            </button>
+            ${phoneBottomNav("daily")}
+          </div>`
+      });
+    }
+
+    function screenCreateRequest(phase) {
+      const r = DEMO.request;
+      const list = phoneShell({
+        top: `<div class="phone-top">
+            <div>
+              <div style="font-size:10px;color:#94a3b8">Site / ${esc(DEMO.site.name)}</div>
+              <h3>Materials Request</h3>
+            </div>
+            <button class="add-request-btn" type="button"><i class="fa-solid fa-plus"></i> Add Request</button>
+          </div>`,
+        body: `
+          <div class="kpi-grid" style="grid-template-columns:1fr 1fr;margin:0 0 10px">
+            <div class="card" style="padding:10px"><div class="kpi-label">Pending</div><div class="kpi-value" style="font-size:20px">0</div></div>
+            <div class="card" style="padding:10px"><div class="kpi-label">Approved</div><div class="kpi-value" style="font-size:20px">0</div></div>
+          </div>
+          <div class="card" style="padding:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <strong style="font-size:12px">All Materials</strong>
+              <span class="pill blue">Listed</span>
+            </div>
+            <div style="font-size:12px;color:#94a3b8;padding:18px 8px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px">
+              Abhi koi request nahi.<br/>Upar <b>Add Request</b> dabao.
+            </div>
+          </div>
+          <div class="comment-box" style="border-color:#c7d2fe;background:#eef0ff">
+            Supervisor mostly mobile use karta hai — ek tap se form open.
+          </div>`
+      });
+
+      const form = phoneShell({
+        top: `<div class="phone-top">
+            <div>
+              <div style="font-size:10px;color:#94a3b8">Add Request</div>
+              <h3>New Material Request</h3>
+            </div>
+            <span class="pill indigo">Mobile</span>
+          </div>`,
+        body: `
+          <div class="comment-box" style="margin-top:0;border-color:#bbf7d0;background:#f0fdf4">
+            Site details auto-fill — supervisor sirf <b>minimum</b> fields fill kare (Qty + Priority).
+          </div>
+          <div id="req-form" style="display:grid;gap:10px;margin-top:10px">
+            <div class="field is-locked"><label>Site</label><input value="${esc(DEMO.site.name)}" readonly /></div>
+            <div class="field is-locked"><label>Construction Stage</label><input value="${esc(r.stage)}" readonly /></div>
+            <div class="field is-locked"><label>Material</label><input value="${esc(r.product)}" readonly /></div>
+            <div class="field is-locked"><label>Unit</label><input value="${esc(r.unit)}" readonly /></div>
+            <div class="field is-locked"><label>Remaining Material</label><input value="${esc(r.remaining + " " + r.unit)}" readonly /></div>
+            <div class="field is-min" data-field="qty"><label>Quantity <em>*</em></label><input value="${esc(r.qty)}" readonly /></div>
+            <div class="field is-min" data-field="priority"><label>Priority <em>*</em></label><input value="${esc(r.priority)}" readonly /></div>
+            <div class="field is-locked"><label>Comment</label><input value="${esc(r.comments.supervisor)}" readonly /></div>
+          </div>`,
+        bottom: `<div class="phone-bottom">
+            <button class="btn btn-primary" type="button" style="width:100%;justify-content:center">
+              <i class="fa-solid fa-paper-plane"></i> Submit Request
+            </button>
+          </div>`
+      });
+
+      return phase === "form" ? form : list;
+    }
+
+    function screenQaApprove() {
+      const r = DEMO.request;
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Request / ${esc(r.id)} / <b>QA Stage</b></div>
+          <h1>QA · Approve Request</h1>
+          <p>Quota / remaining material check karke decision.</p>
+        </div>
+        ${requestStepper(1)}
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div><strong>Ayesha QA</strong> <span class="pill blue">QA Stage</span></div>
+            <span class="pill orange">Pending Review</span>
+          </div>
+          ${decisionMetrics(`<div class="metric"><div class="k">Quota Need / Used</div><div class="v">${esc(r.need)} / ${esc(r.used)}</div></div>`)}
+          <div class="comment-box"><strong>Supervisor comment:</strong> ${esc(r.comments.supervisor)}</div>
+          <div class="comment-box" style="border-color:#c7d2fe"><strong>QA note:</strong> ${esc(r.comments.qa)}</div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn btn-ok" type="button"><i class="fa-solid fa-check"></i> Approve</button>
+            <button class="btn btn-danger" type="button">Reject</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function screenAccountApprove() {
+      const r = DEMO.request;
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Request / ${esc(r.id)} / <b>Account Stage</b></div>
+          <h1>Account · Approve Request</h1>
+          <p>Budget / validity check — phir Purchaser ke liye forward.</p>
+        </div>
+        ${requestStepper(2)}
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div><strong>Bilal Account</strong> <span class="pill indigo">Account Stage</span></div>
+            <span class="pill green">QA Approved</span>
+          </div>
+          ${decisionMetrics(`<div class="metric"><div class="k">Budget Check</div><div class="v">Within limit</div></div>`)}
+          <div class="comment-box"><strong>QA:</strong> ${esc(r.comments.qa)}</div>
+          <div class="comment-box" style="border-color:#c7d2fe"><strong>Account note:</strong> ${esc(r.comments.account)}</div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn btn-ok" type="button"><i class="fa-solid fa-check"></i> Approve</button>
+            <button class="btn btn-danger" type="button">Reject</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function screenPurchaseRelease(phase) {
+      const r = DEMO.request;
+      if (phase === "notify") {
+        return phoneShell({
+          top: `<div class="phone-top" style="background:#0f172a;border:0;color:#fff">
+              <div style="font-size:12px;opacity:.7">9:41</div>
+              <div style="font-size:11px;opacity:.7"><i class="fa-solid fa-signal"></i> LTE</div>
+            </div>`,
+          body: `<div class="lock-bg" style="min-height:420px;border-radius:12px">
+              <div>
+                <div style="font-size:42px;font-weight:700;margin-bottom:18px">9:41</div>
+                <div class="push-toast" style="text-align:left;max-width:280px;margin:0 auto">
+                  <div class="app">STA · Site Tracking</div>
+                  <div class="title">Account approved · action needed</div>
+                  <div class="body">${esc(r.id)} · ${esc(r.product)} ${esc(r.qty)} ${esc(r.unit)} · ${esc(DEMO.site.name)}</div>
+                </div>
+                <div style="margin-top:14px;font-size:12px;color:#94a3b8">Purchaser notification — tap to open app</div>
+              </div>
+            </div>`
+        });
+      }
+
+      return phoneShell({
+        top: `<div class="phone-top">
+            <div>
+              <div style="font-size:10px;color:#94a3b8">Purchaser Stage · ${esc(r.id)}</div>
+              <h3>Review & Release</h3>
+            </div>
+            <span class="pill green">Account OK</span>
+          </div>`,
+        body: `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div class="av" style="width:32px;height:32px;border-radius:999px;display:grid;place-items:center;background:var(--theme-soft);color:var(--theme);font-weight:700;font-size:11px">HP</div>
+            <div>
+              <strong style="font-size:12px">Hamza Purchase</strong>
+              <div style="font-size:10px;color:#64748b">Procurement Team</div>
+            </div>
+          </div>
+          ${requestStepper(3)}
+          <div class="metric-grid">
+            <div class="metric"><div class="k">Date / Time</div><div class="v">${esc(r.datetime)}</div></div>
+            <div class="metric"><div class="k">Stage</div><div class="v">${esc(r.stage)}</div></div>
+            <div class="metric"><div class="k">Product</div><div class="v">${esc(r.product)} (${esc(r.unit)})</div></div>
+            <div class="metric"><div class="k">Requested Qty</div><div class="v">${esc(r.qty)}</div></div>
+            <div class="metric hl"><div class="k">Remaining Material</div><div class="v">${esc(r.remaining)} ${esc(r.unit)}</div></div>
+            <div class="metric"><div class="k">Priority</div><div class="v">${esc(r.priority)}</div></div>
+            <div class="metric hl"><div class="k">Release Qty</div><div class="v">${esc(r.released)} ${esc(r.unit)}</div></div>
+            <div class="metric"><div class="k">Vendor</div><div class="v">${esc(r.vendor)}</div></div>
+          </div>
+          <div class="comment-box"><strong>QA:</strong> ${esc(r.comments.qa)}</div>
+          <div class="comment-box"><strong>Account:</strong> ${esc(r.comments.account)}</div>
+          <div class="comment-box" style="border-color:#c7d2fe">${esc(r.comments.purchaser)}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:8px">Business logic: requested data read karke Release (Approve) ya Reject.</div>`,
+        bottom: `<div class="phone-bottom" style="display:flex;gap:8px">
+            <button class="btn btn-danger" type="button" style="flex:1;justify-content:center">Reject</button>
+            <button class="btn btn-ok" type="button" style="flex:1.4;justify-content:center"><i class="fa-solid fa-check"></i> Approve / Release</button>
+          </div>`
+      });
+    }
+
+    function screenReceive() {
+      const r = DEMO.request;
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Request / ${esc(r.id)} / <b>Receiving Stage</b></div>
+          <h1>Supervisor · Receive Material</h1>
+          <p>Site pe count karke received qty — jab received ≥ released, request complete.</p>
+        </div>
+        ${requestStepper(4)}
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div><strong>Kashif Mehmood</strong> <span class="pill orange">Receiving</span></div>
+            <span class="pill green">Released ${esc(r.released)}</span>
+          </div>
+          ${decisionMetrics(`
+            <div class="metric"><div class="k">Released Qty</div><div class="v">${esc(r.released)} ${esc(r.unit)}</div></div>
+            <div class="metric hl"><div class="k">Received Qty</div><div class="v">${esc(r.received)} ${esc(r.unit)}</div></div>
+          `)}
+          <div class="form-grid" style="margin-top:8px">
+            ${field("received_qty", "Enter Received Quantity", r.received)}
+            ${field("waybill", "Waybill / Photo", "waybill-mul-001.jpg")}
+          </div>
+          <div class="comment-box">${esc(r.comments.receiving)}</div>
+          <div style="margin-top:14px"><button class="btn btn-ok" type="button"><i class="fa-solid fa-box-open"></i> Confirm Receive</button></div>
+        </div>
+      `);
+    }
+
+    function siteTabs(active) {
+      const tabs = [
+        ["dashboard", "Dashboard"],
+        ["stage", "Stage Material"],
+        ["info", "Site Info"],
+        ["total", "Total Material"],
+        ["extra", "Extra Material"],
+        ["daily", "Daily Update"]
+      ];
+      return `<div class="site-tabs">${tabs.map(([k, l]) => `<div class="tab ${active === k ? "on" : ""}">${l}</div>`).join("")}</div>`;
+    }
+
+    function screenDailyPhoto() {
+      const d = DEMO.daily;
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Site / ${esc(DEMO.site.name)} / Daily Update / <b>Image Upload</b></div>
+          <h1>Supervisor · Daily Update Photos</h1>
+          <p>Har din site progress ki image + description record hoti hai.</p>
+        </div>
+        ${siteTabs("daily")}
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <strong>Daily Update · Image Upload</strong>
+            <span class="pill orange">Supervisor</span>
+          </div>
+          <div class="form-grid" id="daily-form">
+            ${field("date", "Date", d.date)}
+            ${field("stage", "Construction Stage", d.stage)}
+            ${field("progress", "Site Progress %", d.progressPct + "%")}
+            ${field("title", "Update Title", d.title)}
+            ${field("description", "Description", d.description)}
+            ${field("category", "Category", "Site Progress")}
+          </div>
+          <div class="photo-drop" style="margin-top:12px">
+            <img src="${esc(d.photo)}" alt="Daily update" />
+            <div><i class="fa-solid fa-image"></i> ${esc(d.photoName)} · attached</div>
+          </div>
+          <div style="margin-top:14px"><button class="btn btn-primary" type="button"><i class="fa-solid fa-cloud-arrow-up"></i> Save Daily Update</button></div>
+        </div>
+      `);
+    }
+
+    function screenCreateIssue() {
+      const iss = DEMO.issue;
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Site / ${esc(DEMO.site.name)} / Daily Update / <b>Issues</b></div>
+          <h1>Supervisor · Create Issue</h1>
+          <p>Timeline exceed / site problem — issue create karke relevant authorities notify.</p>
+        </div>
+        ${siteTabs("daily")}
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <strong>Add Issue · ${esc(iss.id)}</strong>
+            <span class="pill orange">Open</span>
+          </div>
+          <div class="form-grid" id="issue-form">
+            ${field("issueType", "Issue Type", iss.type)}
+            ${field("status", "Status", iss.status)}
+            ${field("priority", "Priority", iss.priority)}
+            ${field("stage", "Stage", iss.stage)}
+            ${field("date", "Date", iss.date)}
+            ${field("impact", "Timeline Impact", iss.impact)}
+            ${field("title", "Issue Title", iss.title)}
+            ${field("explanation", "Explanation", iss.explanation)}
+          </div>
+          <div class="photo-drop" style="margin-top:12px">
+            <img src="${esc(iss.photo)}" alt="Issue evidence" />
+            <div><i class="fa-solid fa-paperclip"></i> Evidence photo attached</div>
+          </div>
+          <div class="comment-box" style="border-color:#fcd34d;background:#fffbeb">
+            <strong>Notify:</strong> ${esc(iss.notifyRoles)} — taake decision jaldi ho sake. Saari history app pe hai.
+          </div>
+          <div style="margin-top:14px"><button class="btn btn-primary" type="button"><i class="fa-solid fa-triangle-exclamation"></i> Submit Issue</button></div>
+        </div>
+      `);
+    }
+
+    function screenSiteDashboard() {
+      const s = DEMO.site;
+      const overall = 62;
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Sites / <b>${esc(s.name)}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+            <div>
+              <h1>${esc(s.name)}</h1>
+              <p>${esc(s.client_name)} · ${esc(s.city)} · Supervisor ${esc(s.supervisors)}</p>
+            </div>
+            <span class="pill indigo">In Progress</span>
+          </div>
+        </div>
+        ${siteTabs("dashboard")}
+
+        <div class="kpi-grid">
+          <div class="card">
+            <div class="kpi-label">Overall Progress</div>
+            <div class="kpi-value">${overall}%</div>
+            <div class="progress-track"><div class="progress-fill" style="width:${overall}%"></div></div>
+          </div>
+          <div class="card"><div class="kpi-label">Open Issues</div><div class="kpi-value">1</div><div class="kpi-note">Labour delay · high</div></div>
+          <div class="card"><div class="kpi-label">Requests</div><div class="kpi-value">3</div><div class="kpi-note">1 approved · 1 rejected · 1 in progress</div></div>
+          <div class="card"><div class="kpi-label">Daily Photos</div><div class="kpi-value">3</div><div class="kpi-note">Latest 18 Oct</div></div>
+        </div>
+
+        <div class="lower-grid">
+          <div class="card">
+            <strong>Stage Progress</strong>
+            ${DEMO.stagesProgress.map((st) => `
+              <div style="margin-top:10px">
+                <div style="display:flex;justify-content:space-between;font-size:12px">
+                  <span>${esc(st.name)}</span>
+                  <span><b>${st.pct}%</b> · ${esc(st.status)}</span>
+                </div>
+                <div class="progress-track"><div class="progress-fill" style="width:${st.pct}%"></div></div>
+              </div>
+            `).join("")}
+          </div>
+          <div class="card">
+            <strong>Map Location</strong>
+            <div class="mini-map" style="margin-top:10px">
+              <div class="pin"><i class="fa-solid fa-location-dot"></i> Multan DHA Ph-1</div>
+            </div>
+            <div style="margin-top:8px;font-size:12px;color:#64748b">${esc(s.address)}</div>
+            <div style="margin-top:4px;font-size:11px;color:#4547D0">${esc(s.location_url)}</div>
+          </div>
+        </div>
+
+        <div class="lower-grid" style="margin-top:12px">
+          <div class="card">
+            <strong>Material Used / Remaining</strong>
+            <table class="app-table" style="margin-top:8px">
+              <thead><tr><th>Material</th><th>Total</th><th>Used</th><th>Remaining</th><th>Extra</th></tr></thead>
+              <tbody>
+                ${DEMO.materials.map((m) => `
+                  <tr>
+                    <td>${esc(m.name)}</td>
+                    <td>${m.total} ${esc(m.unit)}</td>
+                    <td>${m.used}</td>
+                    <td><b>${m.remaining}</b></td>
+                    <td>${m.extra ? `<span class="pill orange">+${m.extra}</span>` : "—"}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <strong>Agreements & Designs</strong>
+            <div class="users-list">
+              ${DEMO.agreements.map((a) => `
+                <div class="user-row">
+                  <div class="av"><i class="fa-solid fa-file-pdf"></i></div>
+                  <div style="flex:1"><strong>${esc(a.name)}</strong><div style="color:#64748b">${esc(a.category)} · ${esc(a.date)}</div></div>
+                  <span class="pill blue">View</span>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <strong>Material Requests · Full Trail</strong>
+          <p style="margin:6px 0 0;font-size:12px;color:#64748b">Kab initiate hua, kab approve, agar reject to kyun — sab ek jagah.</p>
+          <table class="app-table" style="margin-top:8px">
+            <thead><tr><th>ID</th><th>Material</th><th>Stage</th><th>Status</th><th>Trail / Reason</th></tr></thead>
+            <tbody>
+              ${DEMO.requestHistory.map((r) => `
+                <tr>
+                  <td>${esc(r.id)}<div style="font-size:10px;color:#94a3b8">${esc(r.when)}</div></td>
+                  <td>${esc(r.product)} · ${esc(r.qty)}</td>
+                  <td>${esc(r.stage)}</td>
+                  <td>${
+                    r.status === "Approved" ? '<span class="pill green">Approved</span>'
+                    : r.status === "Rejected" ? '<span class="pill orange">Rejected</span>'
+                    : '<span class="pill blue">In Progress</span>'
+                  }</td>
+                  <td>${r.status === "Rejected" ? `<div class="reject-reason">${esc(r.note)}</div>` : esc(r.note)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="lower-grid" style="margin-top:12px">
+          <div class="card">
+            <strong>Daily Updates Gallery</strong>
+            <div class="gallery-grid">
+              ${DEMO.gallery.map((g) => `
+                <div class="gallery-item">
+                  <img src="${esc(g.src)}" alt="" />
+                  <div class="cap">${esc(g.cap)}</div>
+                </div>
+              `).join("")}
+            </div>
+            <div class="comment-box">${esc(DEMO.daily.description)}</div>
+          </div>
+          <div class="card">
+            <strong>Open Issue</strong>
+            <div style="margin-top:10px;display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+              <div>
+                <div style="font-weight:700">${esc(DEMO.issue.title)}</div>
+                <div style="font-size:12px;color:#64748b;margin-top:4px">${esc(DEMO.issue.explanation)}</div>
+              </div>
+              <span class="pill orange">Open</span>
+            </div>
+            <div class="metric-grid" style="margin-top:10px">
+              <div class="metric"><div class="k">Type</div><div class="v">${esc(DEMO.issue.type)}</div></div>
+              <div class="metric"><div class="k">Impact</div><div class="v">${esc(DEMO.issue.impact)}</div></div>
+            </div>
+            <div class="comment-box" style="border-color:#bbf7d0;background:#f0fdf4">
+              <strong>Resolve help:</strong> Location, agreements, material remaining, request trail aur daily photos — sab app pe maujood. Authorities turant context dekh kar decide kar sakte hain.
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <strong>Project Timeline (snapshot)</strong>
+          <p style="margin:6px 0 0;font-size:12px;color:#64748b">Full timeline Site Info step pe detail me — yahan current path.</p>
+          <div class="timeline">
+            ${DEMO.timeline.map((t) => `
+              <div class="tl-item ${esc(t.state)}">
+                <div class="tl-date">${esc(t.date)}</div>
+                <div class="tl-title">${esc(t.title)}</div>
+                <div class="tl-detail">${esc(t.detail)}</div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `);
+    }
+
+    function screenDoneDashboard() {
+      return screenSiteDashboard();
+    }
+
+    function screenStageMaterial() {
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Site / ${esc(DEMO.site.name)} / <b>Stage Material</b></div>
+          <h1>Stage-wise Material</h1>
+          <p>Har construction stage ka planned / used / remaining material — real app tab jaisa.</p>
+        </div>
+        ${siteTabs("stage")}
+        ${DEMO.stageMaterials.map((st) => `
+          <div class="stage-block">
+            <h4>
+              <span>${esc(st.stage)}</span>
+              <span class="pill ${st.status === "Completed" ? "green" : "indigo"}">${esc(st.status)}</span>
+            </h4>
+            <table class="app-table" style="margin-top:8px">
+              <thead><tr><th>Product</th><th>Planned</th><th>Used</th><th>Remaining</th></tr></thead>
+              <tbody>
+                ${st.items.map((it) => `
+                  <tr>
+                    <td>${esc(it.product)}</td>
+                    <td>${it.planned} ${esc(it.unit)}</td>
+                    <td>${it.used}</td>
+                    <td><b>${it.remaining}</b> ${esc(it.unit)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        `).join("")}
+      `);
+    }
+
+    function screenSiteInfo() {
+      const s = DEMO.site;
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Site / ${esc(s.name)} / <b>Site Info</b></div>
+          <h1>Complete Site Info</h1>
+          <p>Master record + assignees + agreements + project timeline.</p>
+        </div>
+        ${siteTabs("info")}
+        <div class="lower-grid">
+          <div class="card">
+            <strong>Site Master Data</strong>
+            <div class="metric-grid" style="margin-top:10px">
+              <div class="metric"><div class="k">Site Name</div><div class="v">${esc(s.name)}</div></div>
+              <div class="metric"><div class="k">Client</div><div class="v">${esc(s.client_name)}</div></div>
+              <div class="metric"><div class="k">City / Province</div><div class="v">${esc(s.city)} · ${esc(s.province)}</div></div>
+              <div class="metric"><div class="k">Plot / Covered</div><div class="v">${esc(s.plot_size)} · ${esc(s.covered_area)}</div></div>
+              <div class="metric"><div class="k">Start Date</div><div class="v">${esc(s.start_date)}</div></div>
+              <div class="metric"><div class="k">End Date</div><div class="v">${esc(s.end_date)}</div></div>
+              <div class="metric"><div class="k">Status</div><div class="v">In Progress</div></div>
+              <div class="metric"><div class="k">Marketing</div><div class="v">${esc(s.marketing_person_name)} · ${esc(s.marketing_person_phone)}</div></div>
+            </div>
+            <div class="comment-box"><strong>Address:</strong> ${esc(s.address)}</div>
+            <div class="mini-map" style="margin-top:10px"><div class="pin"><i class="fa-solid fa-location-dot"></i> Map Location</div></div>
+          </div>
+          <div class="card">
+            <strong>Project Timeline</strong>
+            <p style="margin:6px 0 0;font-size:12px;color:#64748b">Start se target end tak — current stage aur delay risk clear.</p>
+            <div class="timeline">
+              ${DEMO.timeline.map((t) => `
+                <div class="tl-item ${esc(t.state)}">
+                  <div class="tl-date">${esc(t.date)}</div>
+                  <div class="tl-title">${esc(t.title)}</div>
+                  <div class="tl-detail">${esc(t.detail)}</div>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </div>
+        <div class="lower-grid" style="margin-top:12px">
+          <div class="card">
+            <strong>Assigned Team</strong>
+            <div class="users-list">
+              <div class="user-row"><div class="av">KM</div><div style="flex:1"><strong>${esc(s.supervisors)}</strong><div style="color:#64748b">Supervisor</div></div><span class="pill green">Active</span></div>
+              <div class="user-row"><div class="av">HP</div><div style="flex:1"><strong>${esc(s.purchasers)}</strong><div style="color:#64748b">Purchaser</div></div><span class="pill green">Active</span></div>
+              <div class="user-row"><div class="av">US</div><div style="flex:1"><strong>${esc(s.seniorEngineers)}</strong><div style="color:#64748b">SR Engineer</div></div><span class="pill green">Active</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <strong>Agreements & Designs</strong>
+            <div class="users-list">
+              ${DEMO.agreements.map((a) => `
+                <div class="user-row">
+                  <div class="av"><i class="fa-solid fa-file-pdf"></i></div>
+                  <div style="flex:1"><strong>${esc(a.name)}</strong><div style="color:#64748b">${esc(a.category)} · ${esc(a.date)}</div></div>
+                  <span class="pill blue">View</span>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </div>
+      `);
+    }
+
+    function screenDailyUpdatesPage() {
+      const d = DEMO.dailyPage;
+      return shell("sites", `
+        <div class="page-head">
+          <div class="crumb">Site / ${esc(DEMO.site.name)} / <b>Daily Update</b></div>
+          <h1>Daily Updates</h1>
+          <p>Material notes, photos, issues, site progress — daily ops ek tab me.</p>
+        </div>
+        ${siteTabs("daily")}
+        <div class="daily-subtabs">
+          <div class="tab on">Material Request</div>
+          <div class="tab on">Image Upload</div>
+          <div class="tab on">Issues</div>
+          <div class="tab on">Site Progress</div>
+        </div>
+        <div class="lower-grid">
+          <div class="card">
+            <strong>Material Request Notes</strong>
+            <div class="users-list">
+              ${d.materialNotes.map((n) => `
+                <div class="user-row">
+                  <div class="av"><i class="fa-solid fa-clipboard-list"></i></div>
+                  <div style="flex:1"><strong>${esc(n.date)}</strong><div style="color:#64748b">${esc(n.text)}</div></div>
+                </div>
+              `).join("")}
+            </div>
+            <strong style="display:block;margin-top:14px">Site Progress Log</strong>
+            <table class="app-table" style="margin-top:8px">
+              <thead><tr><th>Date</th><th>Stage</th><th>%</th><th>Note</th></tr></thead>
+              <tbody>
+                ${d.progressRows.map((p) => `
+                  <tr>
+                    <td>${esc(p.date)}</td>
+                    <td>${esc(p.stage)}</td>
+                    <td><b>${p.pct}%</b></td>
+                    <td>${esc(p.note)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <strong>Daily Photos</strong>
+            <div class="gallery-grid">
+              ${DEMO.gallery.map((g) => `
+                <div class="gallery-item">
+                  <img src="${esc(g.src)}" alt="" />
+                  <div class="cap">${esc(g.cap)}</div>
+                </div>
+              `).join("")}
+            </div>
+            <div class="comment-box">${esc(DEMO.daily.description)}</div>
+            <strong style="display:block;margin-top:14px">Issues</strong>
+            ${d.issues.map((iss) => `
+              <div class="user-row" style="margin-top:8px">
+                <div class="av"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <div style="flex:1">
+                  <strong>${esc(iss.id)} · ${esc(iss.type)}</strong>
+                  <div style="color:#64748b">${esc(iss.text)}</div>
+                </div>
+                <span class="pill orange">${esc(iss.status)}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `);
+    }
+
+    function setCaption(kicker, title, text) {
+      document.getElementById("caption-kicker").textContent = kicker;
+      document.getElementById("caption-title").textContent = title;
+      document.getElementById("caption-text").textContent = text;
+    }
+
+    function setAppHtml(html) {
+      document.getElementById("app-screen").innerHTML = html;
+    }
+
+    function clearTimers() {
+      if (fillTimer) { clearInterval(fillTimer); fillTimer = null; }
+      if (uploadTimer) { clearInterval(uploadTimer); clearTimeout(uploadTimer); uploadTimer = null; }
+      if (introTimer) { clearTimeout(introTimer); introTimer = null; }
+      if (signalAnimTimer) { clearInterval(signalAnimTimer); signalAnimTimer = null; }
+      if (typeof signalCamTimers !== "undefined" && signalCamTimers.length) {
+        signalCamTimers.forEach((t) => clearTimeout(t));
+        signalCamTimers = [];
+      }
+    }
+
+    function animateFields(containerSelector) {
+      const root = document.querySelector(containerSelector);
+      if (!root) return;
+      const fields = [...root.querySelectorAll(".field")];
+      fields.forEach((f) => f.classList.remove("is-fill", "is-done"));
+      let i = 0;
+      clearInterval(fillTimer);
+      fillTimer = setInterval(() => {
+        if (i > 0) fields[i - 1]?.classList.remove("is-fill"), fields[i - 1]?.classList.add("is-done");
+        if (i >= fields.length) {
+          clearInterval(fillTimer);
+          fillTimer = null;
+          fields.forEach((f) => f.classList.add("is-done"));
+          return;
+        }
+        fields[i].classList.add("is-fill");
+        fields[i].scrollIntoView({ block: "nearest", behavior: "smooth" });
+        i += 1;
+      }, 420);
+    }
+
+    function pakistanStyle() {
+      return {
+        version: 8,
+        sources: {
+          sat: {
+            type: "raster",
+            tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+            tileSize: 256,
+            attribution: "Esri"
+          }
+        },
+        layers: [{ id: "sat", type: "raster", source: "sat" }]
+      };
+    }
+
+    function ensureMap() {
+      if (opsMap || typeof maplibregl === "undefined") {
+        if (!opsMap) document.getElementById("map-offline").classList.add("is-on");
+        return;
+      }
+      try {
+        opsMap = new maplibregl.Map({
+          container: "ops-map",
+          style: pakistanStyle(),
+          center: [DEMO.hq.lng, DEMO.hq.lat],
+          zoom: 5.4,
+          pitch: 35,
+          attributionControl: false
+        });
+        opsMap.on("error", () => document.getElementById("map-offline").classList.add("is-on"));
+        opsMap.on("load", () => {
+          document.getElementById("map-offline").classList.remove("is-on");
+          addMarkers();
+        });
+      } catch (e) {
+        document.getElementById("map-offline").classList.add("is-on");
+      }
+    }
+
+    function el(html) {
+      const d = document.createElement("div");
+      d.innerHTML = html;
+      return d.firstElementChild;
+    }
+
+    // Role geography for digital notify fan-out
+    const ROLE_LOCS = {
+      hq: { lng: DEMO.hq.lng, lat: DEMO.hq.lat, label: "HQ", sub: "Lahore DHA 5" },
+      supervisor: { lng: DEMO.site.lng + 0.018, lat: DEMO.site.lat + 0.01, label: "Supervisor", sub: "On Site · Multan" },
+      purchase: { lng: 71.72, lat: 30.28, label: "Purchase", sub: "Field · Supply" },
+      qa: { lng: 74.428, lat: 31.486, label: "QA", sub: "Near HQ Office" },
+      account: { lng: 74.392, lat: 31.452, label: "Account", sub: "Near HQ Office" }
+    };
+
+    function roleCoord(id) {
+      const r = ROLE_LOCS[id];
+      return r ? [r.lng, r.lat] : null;
+    }
+
+    function addMarkers() {
+      if (!opsMap) return;
+      Object.values(markers).forEach((m) => m.remove());
+      markers = {};
+
+      const hq = el(`<div style="text-align:center"><div class="hq-pulse"></div><div class="sta-badge">STA App<span>Lahore DHA Phase 5</span></div></div>`);
+      markers.hq = new maplibregl.Marker({ element: hq }).setLngLat([DEMO.hq.lng, DEMO.hq.lat]).addTo(opsMap);
+
+      const site = el(`<div style="text-align:center"><div class="site-dot"></div><div class="sta-badge" style="border-color:rgba(244,158,11,.5)">Multan Site<span>DHA Phase 1</span></div></div>`);
+      markers.site = new maplibregl.Marker({ element: site }).setLngLat([DEMO.site.lng, DEMO.site.lat]).addTo(opsMap);
+
+      ["supervisor", "purchase", "qa", "account"].forEach((id) => {
+        const p = ROLE_LOCS[id];
+        const node = el(`<div class="user-pin" data-pin="${id}"><strong>${p.label}</strong><span class="pin-sub">${p.sub}</span></div>`);
+        markers[id] = new maplibregl.Marker({ element: node }).setLngLat([p.lng, p.lat]).addTo(opsMap);
+      });
+    }
+
+    function flyTo(center, zoom, pitch) {
+      if (!opsMap) return;
+      opsMap.flyTo({ center, zoom, pitch: pitch || 40, duration: 1200 });
+    }
+
+    let signalAnimTimer = null;
+    let signalDashOffset = 0;
+    let signalCamTimers = [];
+    const litPins = new Set();
+
+    function clearSignal() {
+      if (signalAnimTimer) {
+        clearInterval(signalAnimTimer);
+        signalAnimTimer = null;
+      }
+      signalCamTimers.forEach((t) => clearTimeout(t));
+      signalCamTimers = [];
+      litPins.clear();
+      document.querySelectorAll(".user-pin").forEach((n) => n.classList.remove("is-hit", "is-hot"));
+      if (!opsMap || !opsMap.getLayer) return;
+      ["signal-dot", "signal-pulse", "signal-line", "signal-glow"].forEach((id) => {
+        if (opsMap.getLayer(id)) opsMap.removeLayer(id);
+      });
+      ["signal-dot-src", "signal-line-src"].forEach((id) => {
+        if (opsMap.getSource(id)) opsMap.removeSource(id);
+      });
+    }
+
+    function drawSignal(from, to) {
+      drawNotifySignals([{ from: from, to: to, pin: null, delay: 0 }]);
+    }
+
+    function lerpCoord(a, b, t) {
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    }
+
+    function markPinHit(pinId) {
+      if (!pinId || litPins.has(pinId)) return;
+      litPins.add(pinId);
+      const node = document.querySelector(`.user-pin[data-pin="${pinId}"]`);
+      if (!node) return;
+      node.classList.add("is-hot", "is-hit");
+    }
+
+    function zoomForNotifyTarget(to, pin) {
+      if (pin === "supervisor") return 11.2;
+      if (pin === "purchase") return 10.4;
+      if (pin === "qa" || pin === "account") return 11.0;
+      // HQ / generic
+      if (to && Math.abs(to[0] - DEMO.hq.lng) < 0.05) return 10.8;
+      if (to && Math.abs(to[0] - DEMO.site.lng) < 0.08) return 11.0;
+      return 9.6;
+    }
+
+    function eyeTrackNotify(r, phase) {
+      if (!opsMap || !r || !r.to) return;
+      const base = zoomForNotifyTarget(r.to, r.pin);
+      if (phase === "chase") {
+        // follow signal mid-path, zoom in toward target
+        const look = lerpCoord(r.from, r.to, 0.62);
+        opsMap.easeTo({
+          center: look,
+          zoom: Math.max(6.4, base - 1.35),
+          pitch: 40,
+          bearing: (opsMap.getBearing() + 8) % 360,
+          duration: Math.min(1100, Math.max(700, r.travel * 0.65)),
+          essential: true
+        });
+        return;
+      }
+      if (phase === "in") {
+        // eye lock on role/site — zoom in
+        opsMap.easeTo({
+          center: r.to,
+          zoom: base + 0.55,
+          pitch: 48,
+          bearing: opsMap.getBearing(),
+          duration: 620,
+          essential: true
+        });
+        return;
+      }
+      if (phase === "out") {
+        // little zoom out after hit, still on same target
+        opsMap.easeTo({
+          center: r.to,
+          zoom: base - 0.25,
+          pitch: 34,
+          bearing: opsMap.getBearing() - 4,
+          duration: 780,
+          essential: true
+        });
+      }
+    }
+
+    function scheduleEyeTracking(list) {
+      signalCamTimers.forEach((t) => clearTimeout(t));
+      signalCamTimers = [];
+      list.forEach((r) => {
+        // as packet leaves / travels — chase zoom
+        signalCamTimers.push(setTimeout(() => eyeTrackNotify(r, "chase"), r.delay + 40));
+        // on arrival — hard zoom in on that role/site
+        signalCamTimers.push(setTimeout(() => eyeTrackNotify(r, "in"), r.delay + r.travel - 80));
+        // then little zoom out before next notify
+        signalCamTimers.push(setTimeout(() => eyeTrackNotify(r, "out"), r.delay + r.travel + 520));
+      });
+    }
+
+    function drawNotifySignals(routes, opts) {
+      if (!opsMap) return;
+      clearSignal();
+      const camOn = !(opts && opts.eyeTrack === false);
+      const list = (routes || [])
+        .filter((r) => r && r.from && r.to)
+        .map((r, i) => ({
+          from: r.from,
+          to: r.to,
+          pin: r.pin || null,
+          delay: r.delay != null ? r.delay : i * 700,
+          travel: r.travel || 1700
+        }));
+      if (!list.length) return;
+
+      opsMap.addSource("signal-line-src", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] }
+      });
+      opsMap.addSource("signal-dot-src", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] }
+      });
+      opsMap.addLayer({
+        id: "signal-glow",
+        type: "line",
+        source: "signal-line-src",
+        paint: {
+          "line-color": "#53B8FF",
+          "line-width": 10,
+          "line-opacity": 0.3,
+          "line-blur": 1.4
+        }
+      });
+      opsMap.addLayer({
+        id: "signal-line",
+        type: "line",
+        source: "signal-line-src",
+        paint: {
+          "line-color": "#A6DFFF",
+          "line-width": 2.4,
+          "line-opacity": 0.92
+        }
+      });
+      opsMap.addLayer({
+        id: "signal-pulse",
+        type: "line",
+        source: "signal-line-src",
+        paint: {
+          "line-color": "#FFFFFF",
+          "line-width": 3.2,
+          "line-opacity": 0.9,
+          "line-dasharray": [0.35, 1.7]
+        }
+      });
+      opsMap.addLayer({
+        id: "signal-dot",
+        type: "circle",
+        source: "signal-dot-src",
+        paint: {
+          "circle-radius": [
+            "case",
+            ["==", ["get", "head"], 1], 8,
+            5
+          ],
+          "circle-color": [
+            "case",
+            ["==", ["get", "head"], 1], "#FFFFFF",
+            "#7dd3fc"
+          ],
+          "circle-stroke-color": "#53B8FF",
+          "circle-stroke-width": 3,
+          "circle-opacity": 0.98
+        }
+      });
+
+      if (camOn) scheduleEyeTracking(list);
+
+      const started = performance.now();
+      signalDashOffset = 0;
+      signalAnimTimer = setInterval(() => {
+        if (!opsMap || !opsMap.getSource("signal-line-src")) return;
+        const now = performance.now();
+        const lineFeatures = [];
+        const dots = [];
+        signalDashOffset = (signalDashOffset + 0.04) % 1;
+
+        list.forEach((r) => {
+          const elapsed = now - started - r.delay;
+          if (elapsed < 0) return;
+          let p = elapsed / r.travel;
+          if (p > 1) p = 1;
+          const eased = 1 - Math.pow(1 - p, 2.2);
+          const mid = lerpCoord(r.from, r.to, eased);
+          lineFeatures.push({
+            type: "Feature",
+            properties: { pin: r.pin || "" },
+            geometry: { type: "LineString", coordinates: [r.from, mid] }
+          });
+          dots.push({
+            type: "Feature",
+            properties: { head: 1 },
+            geometry: { type: "Point", coordinates: mid }
+          });
+          if (eased > 0.12) {
+            dots.push({
+              type: "Feature",
+              properties: { head: 0 },
+              geometry: {
+                type: "Point",
+                coordinates: lerpCoord(r.from, r.to, Math.max(0, eased - 0.12))
+              }
+            });
+          }
+          if (p >= 1) {
+            lineFeatures[lineFeatures.length - 1].geometry.coordinates = [r.from, r.to];
+            markPinHit(r.pin);
+          }
+        });
+
+        try {
+          opsMap.getSource("signal-line-src").setData({
+            type: "FeatureCollection",
+            features: lineFeatures
+          });
+          opsMap.getSource("signal-dot-src").setData({
+            type: "FeatureCollection",
+            features: dots
+          });
+          opsMap.setPaintProperty("signal-pulse", "line-dasharray", [
+            0.3 + (signalDashOffset % 0.35),
+            1.5 + ((1 - signalDashOffset) % 0.7)
+          ]);
+        } catch (e) {}
+      }, 50);
+    }
+
+    function showMapNotify(opts) {
+      const o = opts || {};
+      const from = o.from || [DEMO.site.lng, DEMO.site.lat];
+      const pins = o.pins || ["qa", "account", "purchase", "supervisor"];
+      clearTimers();
+      setOrbit(false);
+      setIntro(false);
+      setMobile(false);
+      setLaptop(false);
+      setMapMode("focus");
+      ensureMap();
+      // Start eye at origin (site/sender), then per-notify zoom in/out tracking
+      flyTo(from, 7.4, 36);
+
+      const nearlySame = (a, b) =>
+        a && b && Math.abs(a[0] - b[0]) < 0.002 && Math.abs(a[1] - b[1]) < 0.002;
+      const routes = [];
+      const hq = roleCoord("hq");
+      // Gap between notifies so zoom-in → little zoom-out can finish
+      const LAPSE = 2100;
+      if (!nearlySame(from, hq)) {
+        routes.push({ from: from, to: hq, pin: null, delay: 350, travel: 1600 });
+      }
+      const order = ["supervisor", "qa", "account", "purchase"];
+      let step = 0;
+      order.forEach((id) => {
+        if (!pins.includes(id)) return;
+        const to = roleCoord(id);
+        if (!to || nearlySame(from, to)) return;
+        step += 1;
+        routes.push({
+          from: from,
+          to: to,
+          pin: id,
+          delay: 350 + step * LAPSE,
+          travel: 1550 + step * 60
+        });
+      });
+      (o.targets || []).forEach((t, i) => {
+        if (!t || nearlySame(from, t)) return;
+        routes.push({
+          from: from,
+          to: t,
+          pin: null,
+          delay: 350 + (step + 1 + i) * LAPSE,
+          travel: 1600
+        });
+      });
+
+      drawNotifySignals(routes);
+      // sender pin lights immediately; receivers light on arrival
+      ["supervisor", "qa", "account", "purchase"].forEach((id) => {
+        const c = roleCoord(id);
+        if (c && nearlySame(from, c)) markPinHit(id);
+      });
+      if (o.kicker || o.title || o.text) {
+        setCaption(o.kicker || "Notify", o.title || "Signal Live", o.text || "");
+      }
+    }
+
+    function hotPins(ids) {
+      document.querySelectorAll(".user-pin").forEach((n) => n.classList.remove("is-hot", "is-hit"));
+      (ids || []).forEach((id) => {
+        const node = document.querySelector(`.user-pin[data-pin="${id}"]`);
+        if (node) node.classList.add("is-hot");
+      });
+    }
+
+    function setMapMode(mode) {
+      const layer = document.getElementById("map-layer");
+      layer.classList.remove("is-dim", "is-focus", "is-hidden");
+      if (mode === "hide") layer.classList.add("is-hidden");
+      else if (mode === "dim") layer.classList.add("is-dim");
+      else layer.classList.add("is-focus");
+    }
+
+    function setLaptop(on, shrink) {
+      const stage = document.getElementById("laptop-stage");
+      const mobile = document.getElementById("mobile-stage");
+      if (on) {
+        if (mobile) {
+          mobile.classList.remove("is-on");
+          mobile.setAttribute("aria-hidden", "true");
+        }
+        stage.classList.add("is-on");
+        stage.classList.toggle("is-shrink", !!shrink);
+      } else {
+        stage.classList.remove("is-on", "is-shrink");
+      }
+    }
+
+    function setMobile(on, html) {
+      const mobile = document.getElementById("mobile-stage");
+      const screen = document.getElementById("mobile-screen");
+      const laptop = document.getElementById("laptop-stage");
+      if (!mobile || !screen) return;
+      if (on) {
+        laptop.classList.remove("is-on", "is-shrink");
+        if (html != null) screen.innerHTML = html;
+        mobile.classList.add("is-on");
+        mobile.setAttribute("aria-hidden", "false");
+      } else {
+        mobile.classList.remove("is-on");
+        mobile.setAttribute("aria-hidden", "true");
+      }
+    }
+
+    function setIntro(on) {
+      document.getElementById("hq-intro-overlay").classList.toggle("is-on", !!on);
+    }
+
+    function setFinale(on) {
+      const el = document.getElementById("finale-overlay");
+      if (!el) return;
+      el.classList.toggle("is-on", !!on);
+      el.setAttribute("aria-hidden", on ? "false" : "true");
+    }
+
+    const NETWORK_SITES = [
+      { id: "mul", name: "Multan DHA", lng: DEMO.site.lng, lat: DEMO.site.lat, hero: true },
+      { id: "lhr", name: "Lahore Johar", lng: 74.35, lat: 31.48 },
+      { id: "isb", name: "Islamabad F-10", lng: 73.04, lat: 33.70 },
+      { id: "khi", name: "Karachi DHA", lng: 67.06, lat: 24.81 },
+      { id: "fsd", name: "Faisalabad", lng: 73.08, lat: 31.42 },
+      { id: "rwp", name: "Rawalpindi", lng: 73.05, lat: 33.60 }
+    ];
+
+    function clearNetworkSites() {
+      Object.keys(markers).forEach((k) => {
+        if (k.indexOf("net_") === 0) {
+          try { markers[k].remove(); } catch (e) {}
+          delete markers[k];
+        }
+      });
+    }
+
+    function showNetworkSites() {
+      if (!opsMap) return;
+      clearNetworkSites();
+      NETWORK_SITES.forEach((s) => {
+        if (s.hero) return; // Multan hero already on map
+        const node = el(`<div style="text-align:center"><div class="net-site-dot"></div><div class="net-site-label">${s.name}</div></div>`);
+        markers["net_" + s.id] = new maplibregl.Marker({ element: node }).setLngLat([s.lng, s.lat]).addTo(opsMap);
+      });
+    }
+
+    function runFinaleSequence() {
+      clearTimers();
+      setFinale(false);
+      setIntro(false);
+      setMobile(false);
+      setLaptop(false);
+      setOrbit(false);
+      setMapMode("focus");
+      ensureMap();
+      showNetworkSites();
+      hotPins(["qa", "account", "purchase", "supervisor"]);
+
+      const hq = roleCoord("hq");
+      // Pakistan-wide view: 6+ sites digitally linked to HQ
+      flyTo([70.9, 29.8], 5.15, 22);
+
+      const routes = [];
+      NETWORK_SITES.forEach((s, i) => {
+        routes.push({
+          from: [s.lng, s.lat],
+          to: hq,
+          pin: null,
+          delay: 280 + i * 480,
+          travel: 1400
+        });
+      });
+      // Then fan-out to all relevant users from Multan hero (demo site)
+      const fromMul = [DEMO.site.lng, DEMO.site.lat];
+      const userOrder = ["supervisor", "qa", "account", "purchase"];
+      userOrder.forEach((id, i) => {
+        routes.push({
+          from: fromMul,
+          to: roleCoord(id),
+          pin: id,
+          delay: 3200 + i * 700,
+          travel: 1300
+        });
+      });
+
+      drawNotifySignals(routes, { eyeTrack: false });
+      setCaption(
+        "Step 26",
+        "6+ Sites · HQ Connected",
+        "Multan, Lahore, Islamabad, Karachi, Faisalabad, Rawalpindi — sab HQ se digitally connected. Phir relevant users live."
+      );
+
+      introTimer = setTimeout(() => {
+        clearNetworkSites();
+        clearSignal();
+        setFinale(true);
+        setCaption(
+          "Last Page",
+          "1–2 Features Thi — Aur Bohot Hain",
+          "Light info page: Supervisor, Purchaser, Accounts, Admin, Company — main aim Client Satisfaction."
+        );
+      }, 7200);
+    }
+
+    function setOrbit(on, message) {
+      const orbit = document.getElementById("device-orbit");
+      if (!on) {
+        orbit.classList.remove("is-on");
+        orbit.innerHTML = "";
+        return;
+      }
+      const cards = [
+        { cls: "d1 is-desktop", role: "Admin · Desktop", name: "Super Admin", msg: message, toast: "HQ Link Live" },
+        { cls: "d2 is-desktop", role: "QA · Desktop", name: "Ayesha QA", msg: message, toast: "Ops Synced" },
+        { cls: "d3 is-desktop", role: "Account · Desktop", name: "Bilal Account", msg: message, toast: "Pipeline Clear" },
+        { cls: "d4 is-desktop", role: "Purchaser · Desktop", name: "Hamza Purchase", msg: message, toast: "Release Ready" },
+        { cls: "d5 is-mobile", role: "Supervisor · Mobile", name: "Kashif Mehmood", msg: message, toast: "Field Online" }
+      ];
+      orbit.innerHTML = cards.map((c) => `
+        <div class="orbit-device ${c.cls}">
+          <div class="role">${esc(c.role)}</div>
+          <div class="name">${esc(c.name)}</div>
+          <div class="msg">${esc(c.msg)}</div>
+          <div class="toast"><i class="fa-solid fa-check-circle"></i> ${esc(c.toast)}</div>
+        </div>
+      `).join("");
+      requestAnimationFrame(() => orbit.classList.add("is-on"));
+    }
+
+    const STEPS = [
+      {
+        id: "hq-open",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setLaptop(false);
+          setIntro(true);
+          setMapMode("focus");
+          setAppHtml("");
+          ensureMap();
+          flyTo([DEMO.hq.lng, DEMO.hq.lat], 13.8, 45);
+          hotPins([]);
+          clearSignal();
+          setCaption("Step 1", "Head Office · STA", "Lahore DHA Phase 5 blink kar raha hai — STA app HQ se open ho rahi hai.");
+          introTimer = setTimeout(() => {
+            setIntro(false);
+            setMapMode("dim");
+            setLaptop(true, false);
+            setAppHtml(screenDashboard());
+            setCaption("Step 1", "Admin Dashboard", "STA open — yeh Admin ka main command center hai. Sites, status, requests yahan se start hote hain.");
+          }, 2000);
+        }
+      },
+      {
+        id: "users",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setIntro(false);
+          setMapMode("dim");
+          setLaptop(true, false);
+          let u = 0;
+          const showUser = () => {
+            setAppHtml(screenUsers(u));
+            animateFields("#user-form");
+          };
+          const showAllDone = () => {
+            setAppHtml(shell("users", `
+              <div class="page-head">
+                <div class="crumb">Management / <b>User Management</b></div>
+                <h1>Team Ready</h1>
+                <p>Tamam roles create — credentials representatives ko share ho chuki hain.</p>
+              </div>
+              <div class="card">
+                <div class="pill green" style="font-size:13px;padding:8px 12px">5 users created · credentials shared</div>
+                <div class="device-strip">
+                  <div class="device-chip"><i class="fa-brands fa-apple"></i> iPhone</div>
+                  <div class="device-chip"><i class="fa-brands fa-android"></i> Android</div>
+                  <div class="device-chip"><i class="fa-solid fa-laptop"></i> Laptop</div>
+                  <div class="device-chip"><i class="fa-solid fa-desktop"></i> Desktop</div>
+                </div>
+                <div class="users-list">
+                  ${DEMO.users.map((x) => `
+                    <div class="user-row">
+                      <div class="av">${esc(x.initials)}</div>
+                      <div style="flex:1"><strong>${esc(x.name)}</strong><div style="color:#64748b">${esc(ROLE_LABEL[x.role])} · ${esc(x.city)} · ${esc(x.email)}</div></div>
+                      <span class="pill green">Active</span>
+                    </div>`).join("")}
+                </div>
+              </div>
+            `));
+          };
+          showUser();
+          uploadTimer = setInterval(() => {
+            u += 1;
+            if (u >= DEMO.users.length) {
+              clearInterval(uploadTimer);
+              uploadTimer = null;
+              clearInterval(fillTimer);
+              fillTimer = null;
+              showAllDone();
+              return;
+            }
+            showUser();
+          }, 2400);
+          setCaption("Step 2", "Users Add", "Admin QA, Account, Purchaser, Supervisor, SR Engineer add karta hai. Credentials share hoti hain. STA iPhone, Android, Desktop, Laptop pe chal sakti hai.");
+        }
+      },
+      {
+        id: "create-site",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(true, false);
+          setAppHtml(screenCreateSite());
+          animateFields("#site-form");
+          const assets = document.getElementById("site-assets");
+          if (assets) {
+            assets.style.opacity = "0.35";
+            setTimeout(() => {
+              assets.style.transition = "opacity .45s ease";
+              assets.style.opacity = "1";
+              assets.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }, 2800);
+          }
+          setCaption("Step 3", "Site Create · Multan", "Site fields + client agreement, drawings, soil report, BOQ, survey map — decision ke liye zaroori assets bhi attach ho rahe hain.");
+        }
+      },
+      {
+        id: "site-notify",
+        run() {
+          showMapNotify({
+            kicker: "Step 4",
+            title: "Site Created · Signal",
+            text: "Pehle HQ, phir lapse ke sath: Supervisor (site), QA/Account (near office), Purchase (field) — har user ko alag signal.",
+            pins: ["qa", "account", "purchase", "supervisor"]
+          });
+        }
+      },
+      {
+        id: "qa-upload",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(true, false);
+          clearSignal();
+          hotPins(["qa"]);
+          let i = 0;
+          setAppHtml(screenQaUpload(0));
+          uploadTimer = setInterval(() => {
+            i += 1;
+            if (i > DEMO.uploadStages.length) {
+              clearInterval(uploadTimer);
+              uploadTimer = null;
+              return;
+            }
+            setAppHtml(screenQaUpload(i));
+          }, 1600);
+          setCaption("Step 5", "QA Stage Upload", "Har stage open ho rahi hai with real construction materials (Bricks/Cement/Steel/Sand) — Basement se Grey Structure tak planned qty set.");
+        }
+      },
+      {
+        id: "upload-notify",
+        run() {
+          showMapNotify({
+            kicker: "Step 6",
+            title: "Upload Notify · Signal",
+            text: "Upload ke baad Multan → HQ, phir har role ko time-lapse signal: site supervisor, near-office QA/Account, field purchase.",
+            pins: ["qa", "account", "purchase", "supervisor"]
+          });
+        }
+      },
+      {
+        id: "sup-request-list",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(false);
+          setMobile(true, screenCreateRequest("list"));
+          clearSignal();
+          hotPins(["supervisor"]);
+          flyTo([DEMO.site.lng, DEMO.site.lat], 12.5, 45);
+          setCaption("Step 7", "Supervisor Mobile", "Laptop hide — sirf mobile. Materials Request list + Add Request button. Next pe form open hoga.");
+        }
+      },
+      {
+        id: "sup-request-form",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(false);
+          setMobile(true, screenCreateRequest("form"));
+          clearSignal();
+          hotPins(["supervisor"]);
+          setCaption("Step 8", "Add Request Form", "Add Request form — site/stage/material/remaining auto. Supervisor sirf Qty + Priority set karke submit.");
+        }
+      },
+      {
+        id: "req-notify",
+        run() {
+          showMapNotify({
+            kicker: "Step 9",
+            title: "Request Notify · Signal",
+            text: "Request raise: site se HQ, phir QA → Account → Purchase ko thori lapse ke sath signal — digital connection clear.",
+            pins: ["qa", "account", "purchase", "supervisor"]
+          });
+        }
+      },
+      {
+        id: "qa-approve",
+        run() {
+          clearTimers();
+          setMobile(false);
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(true, false);
+          clearSignal();
+          setAppHtml(screenQaApprove());
+          hotPins(["qa"]);
+          flyTo([DEMO.hq.lng, DEMO.hq.lat], 13.2, 40);
+          setCaption("Step 10", "QA Approve", "QA remaining material / quota dekh kar approve karta hai — bilkul real app decision screen jaisa.");
+        }
+      },
+      {
+        id: "qa-approved-notify",
+        run() {
+          showMapNotify({
+            kicker: "Step 11",
+            title: "QA → Account · Signal",
+            text: "QA (near HQ office) approve → signal HQ + Account office + Multan supervisor — har pin alag lapse pe light.",
+            pins: ["account", "supervisor", "qa"]
+          });
+        }
+      },
+      {
+        id: "account-approve",
+        run() {
+          clearTimers();
+          setMobile(false);
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(true, false);
+          clearSignal();
+          setAppHtml(screenAccountApprove());
+          hotPins(["account"]);
+          setCaption("Step 12", "Account Approve", "Account pe pehle wali comments + qty + remaining data hai — phir approve.");
+        }
+      },
+      {
+        id: "account-notify",
+        run() {
+          showMapNotify({
+            kicker: "Step 13",
+            title: "Account → Purchase · Signal",
+            text: "Account office se cascade: HQ, field Purchase, site Supervisor — signals thori der ke gap se pahunchte hain.",
+            pins: ["purchase", "supervisor", "account"]
+          });
+        }
+      },
+      {
+        id: "purchase-notify-lock",
+        run() {
+          showMapNotify({
+            kicker: "Step 14",
+            title: "Purchaser Notify · Signal",
+            text: "Pehle HQ, phir field Purchase pin pe signal hit — Supervisor site pe sync. Next pe decide screen.",
+            pins: ["purchase", "supervisor"]
+          });
+        }
+      },
+      {
+        id: "purchase-release",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(false);
+          clearSignal();
+          hotPins(["purchase"]);
+          setMobile(true, screenPurchaseRelease("decide"));
+          setCaption("Step 15", "Purchaser Decide", "Manual open — requested qty, remaining, QA/Account notes. Approve/Release ya Reject.");
+        }
+      },
+      {
+        id: "purchase-released-signal",
+        run() {
+          showMapNotify({
+            kicker: "Step 16",
+            title: "Released · Signal to Site",
+            text: "Field Purchase se release signal: HQ confirm, phir Multan site Supervisor ko lapse ke sath notify.",
+            from: roleCoord("purchase"),
+            pins: ["purchase", "supervisor"]
+          });
+        }
+      },
+      {
+        id: "receive",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(false);
+          clearSignal();
+          hotPins(["supervisor"]);
+          flyTo([DEMO.site.lng, DEMO.site.lat], 12.2, 42);
+          setMobile(true, screenReceiveMobile());
+          setCaption("Step 17", "Supervisor Receive", "Mobile receive — qty + Open Camera se receiving image attach.");
+        }
+      },
+      {
+        id: "daily-mobile-home",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(false);
+          clearSignal();
+          hotPins(["supervisor"]);
+          setMobile(true, screenSupervisorMobileDailyHome());
+          setCaption("Step 18", "Supervisor Daily Home", "Mobile supervisor dashboard → Daily Update (Image / Progress / Issues). Laptop nahi.");
+        }
+      },
+      {
+        id: "daily-photo",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(false);
+          clearSignal();
+          hotPins(["supervisor"]);
+          setMobile(true, screenSupervisorMobileDailyPhoto());
+          setCaption("Step 19", "Daily Photo Mobile", "Image Upload flow — Open Camera, capture, description, Save Daily Update.");
+        }
+      },
+      {
+        id: "create-issue",
+        run() {
+          clearTimers();
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(false);
+          clearSignal();
+          hotPins(["supervisor"]);
+          setMobile(true, screenSupervisorMobileIssue());
+          setCaption("Step 20", "Issue Mobile", "Daily → Issues: explanation + camera evidence. Next pe map signal HQ ko.");
+        }
+      },
+      {
+        id: "issue-notify",
+        run() {
+          showMapNotify({
+            kicker: "Step 21",
+            title: "Daily + Issue · Signal",
+            text: "Site se HQ, phir QA/Account (near office) aur Purchase (field) — har user ko time-lapse signal, pin light on arrival.",
+            pins: ["qa", "account", "purchase", "supervisor"]
+          });
+        }
+      },
+      {
+        id: "site-dashboard",
+        run() {
+          clearTimers();
+          setMobile(false);
+          setOrbit(false);
+          setIntro(false);
+          setMapMode("dim");
+          setLaptop(true, false);
+          clearSignal();
+          setAppHtml(screenSiteDashboard());
+          hotPins(["supervisor"]);
+          flyTo([DEMO.site.lng, DEMO.site.lat], 11.8, 40);
+          setCaption("Step 22", "Site Main Dashboard", "Laptop overview: progress, requests trail, material, gallery, issues.");
+        }
+      },
+      {
+        id: "stage-material",
+        run() {
+          clearTimers();
+          setMobile(false);
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(true, false);
+          clearSignal();
+          setAppHtml(screenStageMaterial());
+          hotPins(["qa", "supervisor"]);
+          setCaption("Step 23", "Stage-wise Material", "Basement → Ground → First → Grey Structure: planned / used / remaining.");
+        }
+      },
+      {
+        id: "site-info",
+        run() {
+          clearTimers();
+          setMobile(false);
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(true, false);
+          clearSignal();
+          setAppHtml(screenSiteInfo());
+          hotPins(["qa", "account", "supervisor"]);
+          setCaption("Step 24", "Site Info + Timeline", "Complete site master data, team, agreements, project timeline.");
+        }
+      },
+      {
+        id: "daily-page",
+        run() {
+          clearTimers();
+          setMobile(false);
+          setOrbit(false);
+          setMapMode("dim");
+          setLaptop(true, false);
+          clearSignal();
+          setAppHtml(screenDailyUpdatesPage());
+          hotPins(["supervisor"]);
+          setCaption("Step 25", "Laptop Daily Updates", "Main laptop Daily Update page — notes, photos, issues, progress log (mobile flow alag pehle aa chuka).");
+        }
+      },
+      {
+        id: "complete",
+        run() {
+          runFinaleSequence();
+        }
+      }
+    ];
+
+    function updateNav() {
+      const prev = document.getElementById("step-prev");
+      const next = document.getElementById("step-next");
+      const ind = document.getElementById("step-ind");
+      prev.disabled = stepIndex <= 0;
+      next.disabled = false;
+      next.innerHTML = stepIndex >= STEPS.length - 1 ? "✓" : "→";
+      ind.innerHTML = `<strong>Step ${stepIndex + 1}</strong><span> / ${STEPS.length}</span>`;
+    }
+
+    function goTo(index) {
+      if (index < 0 || index >= STEPS.length) return;
+      stepIndex = index;
+      if (STEPS[stepIndex].id !== "complete") {
+        setFinale(false);
+        clearNetworkSites();
+      }
+      try { STEPS[stepIndex].run(); } catch (e) { console.warn(e); }
+      updateNav();
+    }
+
+    function startDemo() {
+      document.getElementById("power-station").classList.add("is-gone");
+      const stage = document.getElementById("demo-stage");
+      stage.classList.add("is-live");
+      stage.setAttribute("aria-hidden", "false");
+      ensureMap();
+      goTo(0);
+    }
+
+    function boot() {
+      const bar = document.getElementById("boot-bar");
+      const status = document.getElementById("boot-status");
+      let p = 0;
+      const t = setInterval(() => {
+        p += 8 + Math.random() * 10;
+        if (p >= 100) {
+          p = 100; clearInterval(t);
+          status.textContent = "SYSTEM READY";
+          setTimeout(() => document.getElementById("boot-screen").classList.add("is-gone"), 350);
+        }
+        bar.style.width = p + "%";
+      }, 120);
+    }
+
+    document.getElementById("power-btn").addEventListener("click", startDemo);
+    document.getElementById("step-prev").addEventListener("click", () => goTo(stepIndex - 1));
+    document.getElementById("step-next").addEventListener("click", () => {
+      if (stepIndex >= STEPS.length - 1) return;
+      goTo(stepIndex + 1);
+    });
+    window.addEventListener("keydown", (e) => {
+      if (!document.getElementById("demo-stage").classList.contains("is-live")) return;
+      if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); if (stepIndex < STEPS.length - 1) goTo(stepIndex + 1); }
+      if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); goTo(stepIndex - 1); }
+    });
+
+    boot();
+  </script>
+</body>
+</html>
